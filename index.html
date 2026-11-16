@@ -1,0 +1,627 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#101722">
+  <title>Trade Master | Trader's Hub</title>
+
+  <link rel="stylesheet" href="style.css">
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+
+<!-- =====================================
+     LOGIN AND SIGNUP
+===================================== -->
+
+<section id="authPage" class="auth-page">
+  <div class="auth-card">
+
+    <div class="auth-logo">TM</div>
+
+    <h2 id="authTitle">Welcome Back</h2>
+    <p id="authSubtitle">Sign in to your Trade Master account</p>
+
+    <form id="authForm">
+
+      <div id="nameField" hidden>
+        <label for="fullName">Full Name</label>
+        <input type="text" id="fullName" placeholder="Your full name">
+      </div>
+
+      <div id="phoneField" hidden>
+        <label for="authPhone">Phone Number</label>
+        <input type="tel" id="authPhone" placeholder="0712345678">
+      </div>
+
+      <div id="ageField" hidden>
+        <label for="authAge">Age</label>
+        <input type="number" id="authAge" min="18" max="100" placeholder="Your age">
+      </div>
+
+      <label for="authEmail">Email Address</label>
+      <input type="email" id="authEmail" placeholder="Enter email" required>
+
+      <label for="authPassword">Password</label>
+      <input type="password" id="authPassword" minlength="6"
+        placeholder="Enter password" required>
+
+      <button type="submit" class="primary-btn" id="authSubmit">
+        Login
+      </button>
+
+    </form>
+
+    <p id="authMessage" aria-live="polite"></p>
+
+    <p class="auth-switch">
+      <span id="switchText">Don't have an account?</span>
+      <button type="button" id="switchAuth">Sign Up</button>
+    </p>
+
+    <small>Trade Master · Secure account access</small>
+
+  </div>
+</section>
+
+<!-- =====================================
+     MAIN APPLICATION
+===================================== -->
+
+<div id="app" hidden>
+
+<header class="topbar">
+
+  <a class="brand" href="#hub">B</a>
+
+  <nav class="main-nav">
+    <a class="active" href="#hub">⌂ <span>Trader's Hub</span></a>
+    <a href="#deposit" data-open-deposit>⊙ <span>Deposit</span></a>
+    <a href="#withdraw" data-open-panel="withdraw">⇧ <span>Withdraw</span></a>
+    <a href="#history" data-open-panel="history">◷ <span>History</span></a>
+    <a href="#chat" data-open-panel="chat">▢ <span>Chat</span></a>
+  </nav>
+
+  <div class="top-actions">
+
+    <button class="icon-btn" id="themeBtn" type="button">☼</button>
+
+    <button class="balance" type="button" data-open-panel="profile">
+      <span class="avatar green">R</span>
+      <span id="balanceValue">$0.00</span>⌄
+    </button>
+
+    <button class="deposit-btn" type="button" data-open-deposit>
+      Deposit
+    </button>
+
+    <button class="profile" id="profileBtn" type="button"
+      data-open-panel="profile">♙</button>
+
+    <button class="profile" id="logoutBtn" type="button">
+      Logout
+    </button>
+
+  </div>
+</header>
+
+<!-- =====================================
+     TRADING WORKSPACE
+===================================== -->
+
+<main class="workspace" id="hub">
+
+  <!-- POSITIONS -->
+
+  <aside class="positions panel">
+
+    <div class="tabs">
+      <button class="tab selected" data-tab="open">Open (0)</button>
+      <button class="tab" data-tab="closed">Closed (0)</button>
+      <button class="tab" data-tab="transactions">Transactions</button>
+    </div>
+
+    <div class="empty-state" id="positionsState">
+      <div class="target">◎</div>
+      <strong>No open positions</strong>
+      <span>Your active trades will appear here</span>
+    </div>
+
+    <div class="session-box">
+      <div>
+        <span>Last Session</span>
+        <span>Preview mode</span>
+      </div>
+
+      <div>
+        <span>Session P/L:</span>
+        <b>+$0.00 USD</b>
+      </div>
+
+      <hr>
+
+      <small>0 open positions</small>
+    </div>
+
+  </aside>
+
+  <!-- MARKET CHART -->
+
+  <section class="chart-area">
+
+    <div class="chart-toolbar">
+
+      <div class="market-select">
+        <span class="market-icon">▥</span>
+
+        <div>
+          <strong>Volatility 10 (1s) Index</strong>
+
+          <small>
+            <b id="marketPrice">9452.43</b>
+            <span class="negative" id="marketChange">Preview data</span>
+          </small>
+        </div>
+      </div>
+
+      <div class="chart-tools">
+        <button type="button">↗</button>
+        <button type="button">▥</button>
+        <button type="button">♧</button>
+        <button type="button">⇩</button>
+      </div>
+
+      <button class="zoom" type="button">100%</button>
+
+    </div>
+
+    <div class="chart-wrap">
+      <canvas id="marketChart"></canvas>
+    </div>
+
+    <div class="digit-strip" id="digitStrip"></div>
+
+    <div class="chart-footer">
+      <span>Market feed: preview data only</span>
+      <span id="clock">--:--:--</span>
+    </div>
+
+  </section>
+
+  <!-- TRADE PANEL -->
+
+  <aside class="trade-panel panel">
+
+    <div class="trade-heading">
+      ⓘ Learn about this trade type
+    </div>
+
+    <div class="trade-type">
+      <span class="type-icons">▦ △</span>
+      <strong>Even/Odd</strong>
+    </div>
+
+    <div class="mode-block">
+
+      <div class="field-caption">
+        <span>Trade Mode</span>
+        <small>Preview mode</small>
+      </div>
+
+      <div class="segmented" id="tradeMode">
+        <button class="chosen" type="button">Auto</button>
+        <button type="button">Manual</button>
+      </div>
+
+    </div>
+
+    <div class="risk-fields">
+
+      <label>
+        <span>◎ Target Profit (USD)</span>
+        <input type="number" id="targetProfit" value="200" min="1">
+      </label>
+
+      <label>
+        <span>⚠ Target Loss (USD)</span>
+        <input type="number" id="targetLoss" value="999" min="1">
+      </label>
+
+      <label>
+        <span>⌁ Loss Multiple</span>
+        <input type="number" id="lossMultiple" value="2" min="1" step="0.1">
+      </label>
+
+    </div>
+
+    <div class="stake-block">
+
+      <div class="segmented" id="stakeMode">
+        <button class="chosen" type="button">Stake</button>
+        <button type="button">Payout</button>
+      </div>
+
+      <div class="stake-controls">
+
+        <button id="minusStake" type="button">−</button>
+
+        <div class="stake-input">
+          <span>$</span>
+          <input id="stake" type="number" value="1" min="0.35" step="0.01">
+        </div>
+
+        <button id="plusStake" type="button">＋</button>
+
+        <button class="scanner" id="scannerBtn" type="button">
+          ✧ <b>AI Scanner</b>
+          <small>Preview analysis</small>
+        </button>
+
+      </div>
+
+    </div>
+
+    <div class="last-session">
+      <span>Last Session</span>
+      <b>0 trades</b>
+    </div>
+
+    <!-- EVEN CONTRACT -->
+
+    <div class="contract-card even-card">
+
+      <div class="contract-title">
+        <span>▦</span>
+        <b>Even</b>
+        <i></i>
+        <strong>95.22%</strong>
+      </div>
+
+      <div class="payout-line">
+        <span>Estimated payout</span>
+        <b id="evenPayout">$1.95</b>
+      </div>
+
+      <button class="trade-button even-button" id="evenBtn" disabled>
+        Even <small>Real trading not connected</small>
+      </button>
+
+    </div>
+
+    <!-- ODD CONTRACT -->
+
+    <div class="contract-card odd-card">
+
+      <div class="contract-title">
+        <span>△</span>
+        <b>Odd</b>
+        <i></i>
+        <strong>95.22%</strong>
+      </div>
+
+      <div class="payout-line">
+        <span>Estimated payout</span>
+        <b id="oddPayout">$1.95</b>
+      </div>
+
+      <button class="trade-button odd-button" id="oddBtn" disabled>
+        Odd <small>Real trading not connected</small>
+      </button>
+
+    </div>
+
+    <div class="connection-note">
+      Preview interface. Real trading is disabled until the secure
+      Deriv integration is completed and tested.
+    </div>
+
+  </aside>
+
+</main>
+
+<!-- =====================================
+     DEPOSIT POPUP
+===================================== -->
+
+<div class="modal-backdrop" id="depositModal" hidden>
+
+  <section class="deposit-modal" role="dialog" aria-modal="true"
+    aria-labelledby="depositTitle">
+
+    <header class="modal-header">
+
+      <div>
+        <h2 id="depositTitle">Deposit Funds</h2>
+        <p>Choose payment method</p>
+      </div>
+
+      <button class="modal-close" type="button" data-close-modal>×</button>
+
+    </header>
+
+    <div class="deposit-content">
+
+      <button class="modal-back" type="button" data-close-modal>
+        ← Back
+      </button>
+
+      <label class="modal-label" for="depositAmount">
+        Amount (USD)
+      </label>
+
+      <div class="amount-input-wrap">
+        <span>$</span>
+        <input id="depositAmount" type="number" min="1" step="0.01"
+          value="45" inputmode="decimal">
+      </div>
+
+      <div class="amount-presets">
+        <button type="button" data-amount="10">$10</button>
+        <button type="button" data-amount="25">$25</button>
+        <button type="button" data-amount="50">$50</button>
+        <button type="button" data-amount="100">$100</button>
+        <button type="button" data-amount="250">$250</button>
+        <button type="button" data-amount="500">$500</button>
+      </div>
+
+      <p class="kes-estimate" id="depositFx">
+        ≈ KES 5,851.35
+      </p>
+
+      <label class="modal-label" for="mpesaPhone">
+        M-Pesa number
+      </label>
+
+      <input class="phone-input" id="mpesaPhone" type="tel"
+        placeholder="2547XXXXXXXX"
+        autocomplete="tel" inputmode="tel">
+
+      <small class="phone-hint">
+        Deposits and withdrawals use this number only.
+      </small>
+
+      <button class="deposit-submit" id="depositBtn" type="button">
+        Deposit $45
+      </button>
+
+      <p class="deposit-message" id="depositMsg" aria-live="polite">
+        Payment will be requested through M-Pesa after the secure
+        payment service is configured.
+      </p>
+
+    </div>
+
+  </section>
+
+</div>
+
+<!-- =====================================
+     ACCOUNT POPUPS
+===================================== -->
+
+<div class="modal-backdrop" id="accountModal" hidden>
+
+  <section class="account-modal" role="dialog" aria-modal="true">
+
+    <header class="modal-header">
+
+      <div>
+        <h2 id="accountModalTitle">Account</h2>
+        <p id="accountModalSubtitle">Trade Master</p>
+      </div>
+
+      <button class="modal-close" type="button" data-close-account>
+        ×
+      </button>
+
+    </header>
+
+    <div class="account-modal-content">
+
+      <!-- WITHDRAW -->
+
+      <section class="account-panel-content" id="withdrawPanel">
+
+        <p>
+          Withdrawals will be processed to a verified M-Pesa number
+          when the secure withdrawal service is available.
+        </p>
+
+        <label>
+          M-Pesa phone number
+          <input id="withdrawPhone" type="tel" placeholder="2547XXXXXXXX">
+        </label>
+
+        <label>
+          Withdrawal amount (USD)
+          <input id="withdrawAmount" type="number" min="1"
+            placeholder="Enter USD amount">
+        </label>
+
+        <p class="fx-preview" id="withdrawFx">
+          Enter a USD amount to see its estimated KES equivalent.
+        </p>
+
+        <button class="secondary-btn" type="button" disabled>
+          Withdrawals not connected yet
+        </button>
+
+      </section>
+
+      <!-- HISTORY -->
+
+      <section class="account-panel-content" id="historyPanel" hidden>
+
+        <p>
+          Your M-Pesa deposit records will appear here after backend
+          confirmation.
+        </p>
+
+        <div class="history-empty" id="historyList">
+          No confirmed payment history yet.
+        </div>
+
+      </section>
+
+      <!-- CHAT -->
+
+      <section class="account-panel-content" id="chatPanel" hidden>
+
+        <p>Trade Master support.</p>
+
+        <div class="ai-chat-room">
+
+          <div class="ai-chat-messages" id="aiMessages">
+
+            <div class="ai-message bot-message">
+              <strong>TM AI</strong>
+              <p>
+                Hello! Welcome to Trade Master. Ask about the platform
+                or trading education.
+              </p>
+            </div>
+
+          </div>
+
+          <div class="ai-quick-questions">
+
+            <button type="button"
+              data-ai-question="Explain Even and Odd trading.">
+              Even/Odd trading
+            </button>
+
+            <button type="button"
+              data-ai-question="Explain market volatility.">
+              Market volatility
+            </button>
+
+            <button type="button"
+              data-ai-question="How can I manage trading risk?">
+              Risk management
+            </button>
+
+            <button type="button"
+              data-ai-question="How do I use the AI Scanner?">
+              AI Scanner
+            </button>
+
+          </div>
+
+          <form class="ai-chat-input" id="aiChatForm">
+
+            <input id="aiInput" type="text"
+              placeholder="Ask Trade Master AI..." required>
+
+            <button type="submit" id="aiSendBtn">
+              ➤ Send
+            </button>
+
+          </form>
+
+          <button type="button" class="clear-chat" id="clearAIChat">
+            Clear conversation
+          </button>
+
+          <small class="ai-disclaimer">
+            Responses are educational, not guaranteed trading signals
+            or financial advice.
+          </small>
+
+        </div>
+
+      </section>
+
+      <!-- PROFILE -->
+
+      <section class="account-panel-content" id="profilePanel" hidden>
+
+        <div class="profile-avatar">👤</div>
+
+        <div class="profile-details">
+
+          <label>
+            Full Name
+            <input type="text" id="profileName" readonly>
+          </label>
+
+          <label>
+            Email Address
+            <input type="email" id="profileEmail" readonly>
+          </label>
+
+          <label>
+            Phone Number
+            <input type="tel" id="profilePhone" readonly>
+          </label>
+
+          <label>
+            Age
+            <input type="number" id="profileAge" readonly>
+          </label>
+
+          <label>
+            Account Type
+            <input id="profileAccountType"
+              value="TradeMaster USD Wallet" readonly>
+          </label>
+
+          <label>
+            Account Balance
+            <input id="profileBalance" value="$0.00" readonly>
+          </label>
+
+        </div>
+
+        <div class="profile-actions">
+
+          <button type="button" class="primary-btn" id="editProfileBtn">
+            Edit Profile
+          </button>
+
+          <button type="button" class="secondary-btn"
+            id="saveProfileBtn" hidden>
+            Save Changes
+          </button>
+
+          <button type="button" class="secondary-btn"
+            id="cancelProfileBtn" hidden>
+            Cancel
+          </button>
+
+        </div>
+
+        <small class="muted" id="profileMessage">
+          Your account details are displayed here.
+        </small>
+
+        <button type="button" class="logout-profile-btn"
+          id="profileLogoutBtn">
+          Logout from Account
+        </button>
+
+      </section>
+
+    </div>
+
+  </section>
+
+</div>
+
+<footer>
+  Trade Master · USD wallet · Preview build
+</footer>
+
+</div>
+
+<!-- =====================================
+     JAVASCRIPT
+===================================== -->
+
+<script src="script.js"></script>
+
+</body>
+</html>
