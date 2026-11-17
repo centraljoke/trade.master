@@ -1,7 +1,7 @@
 /* =====================================================
    TRADE MASTER
    SUPABASE + MPESA + DERIV + LIVE MARKET
-   LIVE DIGIT STRIP FIX
+   DEMO WALLET + DEMO TRADING
 ===================================================== */
 
 // ==========================================
@@ -47,6 +47,14 @@ let marketPrices = [];
 let marketTimes = [];
 let marketRawPrices = [];
 let marketLastPrice = null;
+
+// ==========================================
+// DEMO ACCOUNT VARIABLES
+// ==========================================
+
+let tradeMasterAccountMode = "REAL";
+let demoWalletBalance = 10000;
+let demoTradeBusy = false;
 
 // ==========================================
 // CONNECT SUPABASE
@@ -287,6 +295,8 @@ function enterDashboard() {
   loadExchangeRate();
   loadDerivAccounts();
   connectDerivMarket();
+
+  initializeTradeMasterDemo();
 }
 
 // ==========================================
@@ -461,7 +471,6 @@ function connectDerivMarket() {
         return;
       }
 
-      // LOAD MARKET HISTORY
       if (message.history) {
         const prices = message.history.prices || [];
         const times = message.history.times || [];
@@ -498,7 +507,6 @@ function connectDerivMarket() {
         return;
       }
 
-      // RECEIVE LIVE TICKS
       if (message.tick) {
         const price = Number(message.tick.quote);
         const epoch = Number(message.tick.epoch);
@@ -1144,8 +1152,10 @@ function renderChart() {
 // ==========================================
 
 function updateClock() {
-  $("clock").textContent =
-    new Date().toLocaleTimeString();
+  if ($("clock")) {
+    $("clock").textContent =
+      new Date().toLocaleTimeString();
+  }
 }
 
 setInterval(updateClock, 1000);
@@ -1290,7 +1300,7 @@ function answerQuestion(q) {
   const s = q.toLowerCase();
 
   if (s.includes("even") || s.includes("odd")) {
-    return "Even/Odd contracts predict whether the last digit of a market tick is even or odd. The live chart displays market prices, but this screen does not currently place trades.";
+    return "Even/Odd contracts predict whether the last digit of a market tick is even or odd. The live chart displays market prices. Demo trades are simulated and do not represent official Deriv contracts.";
   }
 
   if (s.includes("volatil")) {
@@ -1432,9 +1442,513 @@ $("saveProfileBtn").addEventListener("click", async () => {
   }
 });
 
-// ==========================================
+// =====================================================
+// DEMO ACCOUNT STYLES
+// =====================================================
+
+function addDemoStyles() {
+  if ($("demoTradingStyles")) return;
+
+  const style = document.createElement("style");
+  style.id = "demoTradingStyles";
+
+  style.textContent = `
+    .tm-account-switch {
+      display:flex;
+      align-items:center;
+      gap:6px;
+      padding:7px;
+      background:#172333;
+      border:1px solid #34465c;
+      border-radius:12px;
+      margin:8px 0;
+    }
+
+    .tm-account-switch button {
+      border:0;
+      border-radius:8px;
+      padding:9px 14px;
+      color:#aab7c8;
+      background:transparent;
+      font-weight:800;
+      cursor:pointer;
+    }
+
+    .tm-account-switch button.active {
+      background:#087f68;
+      color:white;
+    }
+
+    .tm-demo-panel {
+      margin:12px 0;
+      padding:14px;
+      border:1px solid #30435a;
+      border-radius:14px;
+      background:#142131;
+    }
+
+    .tm-demo-panel h3 {
+      margin:0 0 8px;
+      font-size:15px;
+    }
+
+    .tm-demo-balance {
+      font-size:24px;
+      font-weight:900;
+      margin:8px 0;
+      color:#42d4b7;
+    }
+
+    .tm-demo-actions {
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:10px;
+      margin-top:12px;
+    }
+
+    .tm-demo-actions button {
+      min-height:48px;
+      border:0;
+      border-radius:10px;
+      font-weight:900;
+      cursor:pointer;
+      color:white;
+    }
+
+    .tm-demo-even { background:#087f68; }
+    .tm-demo-odd { background:#2765bb; }
+
+    .tm-demo-actions button:disabled {
+      opacity:.5;
+      cursor:not-allowed;
+    }
+
+    .tm-demo-result {
+      margin-top:12px;
+      padding:12px;
+      border-radius:10px;
+      display:none;
+      font-weight:800;
+    }
+
+    .tm-demo-result.win {
+      display:block;
+      color:#42e6a4;
+      background:rgba(0,200,130,.12);
+      box-shadow:0 0 15px rgba(0,200,130,.18);
+    }
+
+    .tm-demo-result.loss {
+      display:block;
+      color:#ff6675;
+      background:rgba(255,60,80,.12);
+      box-shadow:0 0 15px rgba(255,60,80,.18);
+    }
+
+    .tm-demo-result.pending {
+      display:block;
+      color:#f3c969;
+      background:rgba(243,201,105,.10);
+    }
+
+    .tm-demo-history {
+      margin-top:12px;
+      font-size:12px;
+    }
+
+    .tm-demo-history-row {
+      display:flex;
+      justify-content:space-between;
+      gap:8px;
+      padding:10px 0;
+      border-bottom:1px solid #30435a;
+    }
+
+    .tm-demo-history-row .won { color:#42e6a4; }
+    .tm-demo-history-row .lost { color:#ff6675; }
+
+    .tm-demo-hidden {
+      display:none!important;
+    }
+  `;
+
+  document.head.appendChild(style);
+}
+
+// =====================================================
+// CREATE DEMO ACCOUNT INTERFACE
+// =====================================================
+
+function createDemoInterface() {
+  if ($("tmAccountSwitch")) return;
+
+  addDemoStyles();
+
+  const topActions = document.querySelector(".top-actions");
+
+  const switcher = document.createElement("div");
+  switcher.id = "tmAccountSwitch";
+  switcher.className = "tm-account-switch";
+
+  switcher.innerHTML = `
+    <button type="button" id="tmRealMode" class="active">
+      R Real
+    </button>
+    <button type="button" id="tmDemoMode">
+      D Demo
+    </button>
+  `;
+
+  if (topActions) {
+    topActions.prepend(switcher);
+  } else {
+    $("app").prepend(switcher);
+  }
+
+  const panel = document.createElement("section");
+  panel.id = "tmDemoPanel";
+  panel.className = "tm-demo-panel tm-demo-hidden";
+
+  panel.innerHTML = `
+    <h3>Demo Trading Account</h3>
+
+    <div class="tm-demo-balance" id="tmDemoBalance">
+      $10,000.00
+    </div>
+
+    <small>Virtual funds · Simulated trading</small>
+
+    <div class="tm-demo-actions">
+      <button type="button"
+        class="tm-demo-even"
+        id="tmDemoEven">
+        EVEN
+      </button>
+
+      <button type="button"
+        class="tm-demo-odd"
+        id="tmDemoOdd">
+        ODD
+      </button>
+    </div>
+
+    <div id="tmDemoResult" class="tm-demo-result"></div>
+
+    <div class="tm-demo-history">
+      <strong>Demo Trade History</strong>
+      <div id="tmDemoHistory">
+        Loading history...
+      </div>
+    </div>
+  `;
+
+  const workspace = document.querySelector(".workspace");
+
+  if (workspace) {
+    workspace.prepend(panel);
+  } else {
+    $("app").appendChild(panel);
+  }
+
+  $("tmRealMode").addEventListener("click", () => {
+    switchTradeMasterAccount("REAL");
+  });
+
+  $("tmDemoMode").addEventListener("click", () => {
+    switchTradeMasterAccount("DEMO");
+  });
+
+  $("tmDemoEven").addEventListener("click", () => {
+    placeTradeMasterDemoTrade("EVEN");
+  });
+
+  $("tmDemoOdd").addEventListener("click", () => {
+    placeTradeMasterDemoTrade("ODD");
+  });
+}
+
+// =====================================================
+// SWITCH REAL / DEMO
+// =====================================================
+
+async function switchTradeMasterAccount(mode) {
+  tradeMasterAccountMode = mode;
+
+  $("tmRealMode").classList.toggle(
+    "active",
+    mode === "REAL"
+  );
+
+  $("tmDemoMode").classList.toggle(
+    "active",
+    mode === "DEMO"
+  );
+
+  $("tmDemoPanel").classList.toggle(
+    "tm-demo-hidden",
+    mode !== "DEMO"
+  );
+
+  const balanceElement = $("balanceValue");
+
+  if (mode === "DEMO") {
+    if (balanceElement) {
+      balanceElement.textContent = "DEMO ACCOUNT";
+    }
+
+    await loadTradeMasterDemoWallet();
+    await loadTradeMasterDemoHistory();
+
+  } else {
+    loadDerivAccounts();
+  }
+}
+
+// =====================================================
+// LOAD DEMO WALLET FROM SUPABASE
+// =====================================================
+
+async function loadTradeMasterDemoWallet() {
+  if (!supabaseClient || !currentSession) return;
+
+  const { data, error } = await supabaseClient
+    .from("demo_wallets")
+    .select("balance,currency")
+    .eq("user_id", currentSession.user.id)
+    .maybeSingle();
+
+  if (error) {
+    console.error("Demo wallet error:", error);
+    toast("Unable to load Demo wallet.");
+    return;
+  }
+
+  if (!data) {
+    toast("Demo wallet not found. Please contact support.");
+    return;
+  }
+
+  demoWalletBalance = Number(data.balance);
+
+  $("tmDemoBalance").textContent =
+    money(demoWalletBalance);
+}
+
+// =====================================================
+// LOAD DEMO TRADE HISTORY
+// =====================================================
+
+async function loadTradeMasterDemoHistory() {
+  if (!supabaseClient || !currentSession) return;
+
+  const history = $("tmDemoHistory");
+
+  history.textContent = "Loading history...";
+
+  const { data, error } = await supabaseClient
+    .from("demo_trades")
+    .select(
+      "id,contract_type,stake,status,payout,profit,created_at"
+    )
+    .eq("user_id", currentSession.user.id)
+    .order("created_at", { ascending: false })
+    .limit(20);
+
+  if (error) {
+    console.error("Demo history error:", error);
+    history.textContent = "Unable to load trade history.";
+    return;
+  }
+
+  if (!data || data.length === 0) {
+    history.textContent = "No Demo trades yet.";
+    return;
+  }
+
+  history.innerHTML = data.map(trade => {
+    const status = String(trade.status || "").toUpperCase();
+
+    const resultClass =
+      status === "WON" ? "won" :
+      status === "LOST" ? "lost" : "";
+
+    const date = new Date(trade.created_at)
+      .toLocaleString();
+
+    return `
+      <div class="tm-demo-history-row">
+        <div>
+          <strong>${trade.contract_type}</strong>
+          <br>
+          <small>${date}</small>
+        </div>
+
+        <div style="text-align:right">
+          <strong>${money(trade.stake)}</strong>
+          <br>
+          <span class="${resultClass}">${status}</span>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+// =====================================================
+// DISPLAY DEMO RESULT
+// =====================================================
+
+function showTradeMasterDemoResult(type, message) {
+  const box = $("tmDemoResult");
+
+  box.className = "tm-demo-result " + type;
+  box.textContent = message;
+}
+
+// =====================================================
+// PLACE DEMO TRADE
+// =====================================================
+
+async function placeTradeMasterDemoTrade(contractType) {
+  if (demoTradeBusy) return;
+
+  if (!supabaseClient || !currentSession) {
+    toast("Please log in first.");
+    return;
+  }
+
+  if (tradeMasterAccountMode !== "DEMO") {
+    toast("Switch to Demo account first.");
+    return;
+  }
+
+  const stake = Number($("stake").value);
+
+  if (!Number.isFinite(stake) || stake < 0.35) {
+    toast("Minimum Demo stake is $0.35.");
+    return;
+  }
+
+  if (stake > demoWalletBalance) {
+    toast("Insufficient Demo balance.");
+    return;
+  }
+
+  const evenButton = $("tmDemoEven");
+  const oddButton = $("tmDemoOdd");
+
+  demoTradeBusy = true;
+
+  evenButton.disabled = true;
+  oddButton.disabled = true;
+
+  evenButton.textContent = "PLEASE WAIT...";
+  oddButton.textContent = "PLEASE WAIT...";
+
+  showTradeMasterDemoResult(
+    "pending",
+    "Waiting for market entry and settlement..."
+  );
+
+  let requestReturnedPending = false;
+
+  try {
+    const { data, error } =
+      await supabaseClient.functions.invoke(
+        "demo-trade",
+        {
+          body: {
+            contract_type: contractType,
+            stake: stake
+          }
+        }
+      );
+
+    if (error) {
+      throw error;
+    }
+
+    if (!data) {
+      throw new Error("Empty response from Demo trading server.");
+    }
+
+    if (data.status === "PENDING") {
+      requestReturnedPending = true;
+
+      showTradeMasterDemoResult(
+        "pending",
+        "Trade is pending settlement. Do not submit another trade. Trade ID: " +
+        data.trade_id
+      );
+
+      await loadTradeMasterDemoWallet();
+      await loadTradeMasterDemoHistory();
+      return;
+    }
+
+    if (data.error) {
+      throw new Error(data.error);
+    }
+
+    const won = String(data.status).toUpperCase() === "WON";
+
+    const profit = Number(data.profit || 0);
+    const payout = Number(data.payout || 0);
+
+    showTradeMasterDemoResult(
+      won ? "win" : "loss",
+      won
+        ? "↓ PROFIT +" + money(profit) +
+          " · Payout " + money(payout)
+        : "↓ LOSS -" + money(stake)
+    );
+
+    await loadTradeMasterDemoWallet();
+    await loadTradeMasterDemoHistory();
+
+    toast(won ? "Demo trade won." : "Demo trade lost.");
+
+  } catch (error) {
+    console.error("Demo trade error:", error);
+
+    // A network error may happen after the server has created
+    // the trade. Do not automatically retry the request.
+    showTradeMasterDemoResult(
+      "pending",
+      "Trade result could not be confirmed. Check Demo history before trying again."
+    );
+
+    await loadTradeMasterDemoWallet();
+    await loadTradeMasterDemoHistory();
+
+  } finally {
+    demoTradeBusy = false;
+
+    evenButton.disabled = false;
+    oddButton.disabled = false;
+
+    evenButton.textContent = "EVEN";
+    oddButton.textContent = "ODD";
+  }
+}
+
+// =====================================================
+// INITIALIZE DEMO INTERFACE
+// =====================================================
+
+function initializeTradeMasterDemo() {
+  if (!currentSession || !$("app")) return;
+
+  createDemoInterface();
+
+  if (tradeMasterAccountMode === "DEMO") {
+    loadTradeMasterDemoWallet();
+    loadTradeMasterDemoHistory();
+  }
+}
+
+// =====================================================
 // RESTORE SUPABASE SESSION
-// ==========================================
+// =====================================================
 
 (async function init() {
   updatePayout();
@@ -1496,3 +2010,4 @@ if (supabaseClient) {
 }
 
 console.log("Trade Master application script loaded.");
+console.log("Trade Master Demo module loaded.");
