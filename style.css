@@ -1,221 +1,141 @@
-/* =========================================
-   TRADEMASTER - MOBILE FIRST INTERFACE
-   Compact Android and small-screen layout
-========================================= */
+/* ==========================================
+   TRADE MASTER — DARK THEME RESTORATION
+========================================== */
 
-@media (max-width: 600px) {
-
-  * {
-    box-sizing: border-box;
-  }
-
-  html,
-  body {
-    width: 100%;
-    max-width: 100%;
-    overflow-x: hidden;
-  }
-
-  body {
-    font-size: 13px;
-  }
-
-  #app {
-    width: 100%;
-    max-width: 100%;
-    padding: 8px;
-    margin: 0 auto;
-    overflow-x: hidden;
-  }
-
-  header,
-  .header,
-  .topbar,
-  .navbar {
-    min-height: 48px;
-    gap: 8px;
-    flex-wrap: wrap;
-  }
-
-  button,
-  .button,
-  .trade-button {
-    min-height: 44px;
-    border-radius: 10px;
-    font-size: 13px;
-  }
-
-  input,
-  select {
-    min-height: 42px;
-    max-width: 100%;
-    font-size: 14px;
-  }
-
-  .card,
-  .panel,
-  .contract-card,
-  .market-card {
-    width: 100%;
-    max-width: 100%;
-    margin-bottom: 10px;
-    border-radius: 12px;
-  }
-
-  /* Market information */
-
-  #marketPrice {
-    font-size: clamp(22px, 7vw, 32px);
-    font-weight: 800;
-    overflow-wrap: anywhere;
-  }
-
-  #marketChange {
-    font-size: 12px;
-  }
-
-  #marketChart {
-    width: 100% !important;
-    max-width: 100%;
-    max-height: 190px;
-  }
-
-  /* Digit circles */
-
-  .digit-strip {
-    display: grid !important;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 8px;
-    width: 100%;
-    overflow: visible;
-    padding: 8px 2px;
-  }
-
-  .digit {
-    width: 100%;
-    min-width: 0;
-    min-height: 55px;
-    height: auto;
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-direction: column;
-    gap: 3px;
-    font-size: 17px;
-    font-weight: 800;
-  }
-
-  .digit small {
-    font-size: 10px;
-    font-weight: 600;
-  }
-
-  /* Trading controls */
-
-  .trade-button {
-    width: 100%;
-    padding: 12px 6px;
-    font-weight: 800;
-  }
-
-  .contract-card {
-    padding: 10px;
-  }
-
-  .contract-card h3 {
-    font-size: 15px;
-  }
-
-  /* Positions */
-
-  .tabs {
-    display: flex;
-    width: 100%;
-    gap: 5px;
-    overflow-x: auto;
-    scrollbar-width: none;
-  }
-
-  .tabs::-webkit-scrollbar {
-    display: none;
-  }
-
-  .tab {
-    flex: 1;
-    min-width: 0;
-    padding: 10px 5px;
-    font-size: 11px;
-    white-space: nowrap;
-  }
-
-  /* Account and balance */
-
-  #balanceValue {
-    font-size: 19px;
-    font-weight: 800;
-    overflow-wrap: anywhere;
-  }
-
-  /* Forms and popups */
-
-  .modal,
-  .popup,
-  .deposit-modal {
-    width: calc(100% - 20px);
-    max-width: 420px;
-    max-height: 85vh;
-    overflow-y: auto;
-  }
-
-  /* Prevent oversized content */
-
-  img,
-  canvas,
-  svg,
-  table {
-    max-width: 100%;
-  }
-
-  table {
-    display: block;
-    overflow-x: auto;
-  }
-
-  /* Better touch experience */
-
-  button,
-  .tab,
-  select,
-  input {
-    touch-action: manipulation;
-  }
-
+:root {
+  color-scheme: dark;
+  --tm-bg: #0b1220;
+  --tm-panel: #111c2d;
+  --tm-card: #172438;
+  --tm-border: #26364d;
+  --tm-text: #f1f5f9;
+  --tm-muted: #94a3b8;
+  --tm-green: #00d68f;
+  --tm-red: #ff5263;
 }
 
-/* Extra-small Android phones */
+html,
+body {
+  background: var(--tm-bg) !important;
+  color: var(--tm-text) !important;
+  min-height: 100%;
+}
 
-@media (max-width: 360px) {
+body,
+#app {
+  background-color: var(--tm-bg) !important;
+  color: var(--tm-text) !important;
+}
+
+#app {
+  min-height: 100vh;
+}
+
+.topbar,
+header,
+.workspace,
+.panel,
+.card,
+.contract-card,
+.market-card,
+.balance,
+.modal,
+.popup,
+.deposit-modal {
+  background-color: var(--tm-panel) !important;
+  color: var(--tm-text) !important;
+  border-color: var(--tm-border) !important;
+}
+
+button,
+.tab,
+.trade-button {
+  color: var(--tm-text);
+}
+
+input,
+select,
+textarea {
+  background: #0b1626 !important;
+  color: var(--tm-text) !important;
+  border: 1px solid var(--tm-border) !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--tm-muted) !important;
+}
+
+h1, h2, h3, h4, p, label, span {
+  color: inherit;
+}
+
+small,
+.muted,
+.subtitle {
+  color: var(--tm-muted);
+}
+
+#marketPrice {
+  color: var(--tm-text) !important;
+}
+
+#evenBtn {
+  background: #063d30 !important;
+  border-color: var(--tm-green) !important;
+}
+
+#oddBtn {
+  background: #451d29 !important;
+  border-color: var(--tm-red) !important;
+}
+
+/* Demo account area */
+#tradeMasterDemoPanel {
+  background: var(--tm-panel) !important;
+  color: var(--tm-text) !important;
+  border: 1px solid var(--tm-border) !important;
+  border-radius: 16px;
+  padding: 14px;
+}
+
+#tradeMasterDemoPanel button {
+  border-radius: 10px;
+  font-weight: 700;
+}
+
+#tradeMasterDemoPanel .demo-even,
+#tradeMasterDemoPanel [data-demo="EVEN"] {
+  background: #063d30 !important;
+  color: #00e6a0 !important;
+}
+
+#tradeMasterDemoPanel .demo-odd,
+#tradeMasterDemoPanel [data-demo="ODD"] {
+  background: #451d29 !important;
+  color: #ff6878 !important;
+}
+
+/* Account switcher */
+#tradeMasterAccountSwitcher {
+  background: #172438 !important;
+  color: white !important;
+  border: 1px solid var(--tm-border) !important;
+  border-radius: 12px;
+}
+
+/* Mobile appearance */
+@media (max-width: 600px) {
+  body {
+    background: var(--tm-bg) !important;
+  }
 
   #app {
-    padding: 5px;
+    padding: 8px;
   }
 
-  .digit-strip {
-    gap: 5px;
+  #tradeMasterDemoPanel {
+    margin-bottom: 12px;
+    width: 100%;
   }
-
-  .digit {
-    min-height: 49px;
-    font-size: 15px;
-  }
-
-  .digit small {
-    font-size: 9px;
-  }
-
-  .trade-button {
-    font-size: 12px;
-  }
-
 }
