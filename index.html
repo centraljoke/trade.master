@@ -79,11 +79,7 @@
         <span id="balanceValue">$0.00</span>⌄
       </button>
 
-      <!-- NEW DERIV CONNECTION BUTTON -->
-      <button
-        class="deposit-btn"
-        id="connectDerivBtn"
-        type="button">
+      <button class="deposit-btn" id="connectDerivBtn" type="button">
         Connect Deriv
       </button>
 
@@ -173,7 +169,6 @@
         ⓘ Learn about this trade type
       </div>
 
-      <!-- DERIV CONNECTION STATUS -->
       <div class="connection-note" id="derivConnectionBox">
         <strong>Deriv Account:</strong>
         <span id="derivStatus" aria-live="polite">Not connected</span>
@@ -244,7 +239,6 @@
         <b>0 trades</b>
       </div>
 
-      <!-- EVEN CONTRACT -->
       <div class="contract-card even-card">
         <div class="contract-title">
           <span>▦</span>
@@ -263,7 +257,6 @@
         </button>
       </div>
 
-      <!-- ODD CONTRACT -->
       <div class="contract-card odd-card">
         <div class="contract-title">
           <span>△</span>
@@ -512,6 +505,11 @@
 
 </div>
 
+<!-- LOAD WEBSITE LOGIC FIRST -->
 <script src="script.js"></script>
+
+<!-- LOAD DERIV AUTHORIZATION LOGIC -->
+<script src="deriv-auth.js"></script>
+
 </body>
 </html>
