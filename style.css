@@ -1,465 +1,221 @@
+/* =========================================
+   TRADEMASTER - MOBILE FIRST INTERFACE
+   Compact Android and small-screen layout
+========================================= */
 
-*{box-sizing:border-box}
-:root{
-  --bg:#101722;
-  --panel:#1e2737;
-  --line:#2c374a;
-  --text:#eef3fb;
-  --muted:#91a0b7;
-  --teal:#00bd91;
-  --field:#151d2a
-}
-[hidden]{display:none!important}
-html,body{
-  margin:0;width:100%;height:100%;overflow:hidden;
-  background:var(--bg);color:var(--text);
-  font:13px Inter,Arial,sans-serif
-}
-button,input{font:inherit}
-button{cursor:pointer}
+@media (max-width: 600px) {
 
-.auth-page{
-  height:100vh;display:grid;place-items:center;padding:18px;
-  background:radial-gradient(circle at top right,#17433f,transparent 45%),#101722;
-  overflow:auto
-}
-.auth-card{
-  width:min(100%,370px);padding:28px 24px;
-  background:#1b2534;border:1px solid #344055;
-  border-radius:14px;box-shadow:0 15px 50px #0006
-}
-.auth-logo{
-  width:48px;height:48px;margin:0 auto 18px;
-  display:grid;place-items:center;border-radius:12px;
-  background:#00bd91;color:#061b18;font-size:20px;font-weight:900
-}
-.auth-card h2,.auth-card>p{text-align:center}
-.auth-card h2{margin:0 0 7px;font-size:22px}
-.auth-card>p{color:var(--muted);font-size:12px}
-.auth-card label,.account-modal label{
-  display:block;margin:13px 0 6px;color:#bdc9d9;font-size:12px
-}
-.auth-card input,.account-modal input{
-  width:100%;height:42px;padding:10px;border:1px solid #39465a;
-  border-radius:7px;background:#111a27;color:white;outline:none
-}
-.auth-card input:focus,.account-modal input:focus{border-color:var(--teal)}
-.primary-btn{
-  width:100%;height:42px;margin-top:18px;border:0;
-  border-radius:7px;background:var(--teal);
-  color:#061b18;font-weight:800
-}
-.auth-switch{margin-top:18px}
-.auth-switch button{border:0;background:none;color:#00d0a0;font-weight:700}
-.auth-card>small{
-  display:block;margin-top:22px;text-align:center;color:#718198
-}
-#authMessage{color:#ff747e;min-height:16px;font-size:12px}
-
-/* TOP NAVIGATION */
-.topbar{
-  height:48px;display:flex;align-items:center;gap:20px;
-  padding:0 14px;background:#111620;
-  border-bottom:1px solid #273143;position:relative;z-index:4
-}
-.brand{
-  width:28px;height:28px;flex:0 0 28px;border-radius:7px;
-  background:#00bd9b;color:#fff;display:grid;
-  place-items:center;font-weight:900;text-decoration:none
-}
-.main-nav{
-  height:100%;display:flex;align-items:center;
-  gap:22px;flex:1;min-width:0
-}
-.main-nav a{
-  height:100%;display:flex;align-items:center;gap:7px;
-  color:#98a5b8;text-decoration:none;white-space:nowrap;font-size:13px
-}
-.main-nav a.active,.main-nav a:hover{color:#eaf1fb}
-.top-actions{display:flex;align-items:center;gap:9px}
-.icon-btn,.profile,.balance{
-  height:34px;padding:0 10px;border:1px solid #2b3547;
-  border-radius:7px;background:#1d2635;color:#dce5f3
-}
-.balance{display:flex;align-items:center;gap:7px;font-weight:700}
-.avatar{
-  width:22px;height:22px;border-radius:50%;
-  display:grid;place-items:center;background:#075d51;color:#00d4ac
-}
-.deposit-btn{
-  height:34px;padding:0 17px;border:0;border-radius:20px;
-  background:#00bd91;color:#06241e;font-weight:800
-}
-.profile{cursor:pointer}
-
-/* FULL SCREEN DASHBOARD */
-.workspace{
-  display:grid;
-  grid-template-columns:minmax(210px,20.5%) minmax(300px,1fr) minmax(285px,22%);
-  height:calc(100dvh - 48px);
-  min-height:0;overflow:hidden
-}
-.panel{
-  background:var(--panel);border-right:1px solid var(--line);
-  min-width:0;min-height:0
-}
-.positions{display:flex;flex-direction:column}
-.tabs{
-  height:40px;flex:0 0 40px;display:flex;
-  border-bottom:1px solid var(--line)
-}
-.tab{
-  flex:1;min-width:0;padding:0 3px;background:transparent;
-  border:0;color:#8e9bb0;font-size:11px
-}
-.tab.selected{color:#45d5c7;border-bottom:2px solid #45d5c7}
-.empty-state{
-  margin:auto;display:flex;align-items:center;
-  flex-direction:column;gap:8px;color:white;text-align:center
-}
-.empty-state span{font-size:11px;color:#9aa8bf}
-.target{font-size:36px;color:#718096}
-.session-box{padding:12px 14px;color:#8495b0;font-size:11px}
-.session-box div{display:flex;justify-content:space-between;margin:8px 0}
-.session-box b{color:#36c6c1}
-.session-box hr{border:0;border-top:1px solid var(--line)}
-
-/* MARKET CHART */
-.chart-area{
-  position:relative;min-width:0;min-height:0;
-  background:#141b27;overflow:hidden
-}
-.chart-toolbar{
-  height:55px;position:absolute;z-index:2;top:10px;
-  left:10px;right:10px;display:flex;
-  align-items:flex-start;gap:8px
-}
-.market-select{
-  display:flex;align-items:center;gap:8px;
-  background:#202a3a;border:1px solid #303c50;
-  border-radius:7px;padding:8px 10px
-}
-.market-icon{color:#47c6c2;padding:5px}
-.market-select strong{font-size:12px}
-.market-select small{
-  display:block;color:#aab7ca;margin-top:4px;font-size:10px
-}
-.negative{color:#ff5d68}
-.chart-tools{
-  display:flex;flex-direction:column;background:#202a3a;
-  border:1px solid #303c50;border-radius:6px
-}
-.chart-tools button,.zoom{
-  background:transparent;border:0;color:#a7b7cb;
-  padding:6px 8px;font-size:11px
-}
-.zoom{
-  margin-left:auto;background:#202a3a;
-  border:1px solid #303c50;border-radius:5px
-}
-.chart-wrap{
-  position:absolute;inset:0 0 22px;padding:72px 8px 35px
-}
-.chart-footer{
-  position:absolute;bottom:5px;left:10px;right:10px;
-  display:flex;justify-content:space-between;
-  color:#7e8ba1;font-size:10px
-}
-.digit-strip{
-  position:absolute;bottom:30px;left:4%;right:4%;
-  display:flex;justify-content:center;gap:6px;pointer-events:none
-}
-.digit{
-  width:38px;height:38px;border:2px solid #344155;
-  background:#202a3b;border-radius:50%;display:grid;
-  place-items:center;font-weight:800;font-size:11px;position:relative
-}
-.digit small{
-  position:absolute;bottom:2px;font-size:7px;
-  color:#a5b2c4;font-weight:400
-}
-.digit.hot{border-top-color:#27c6c2}
-
-/* RIGHT TRADING PANEL */
-.trade-panel{
-  overflow-y:auto;overflow-x:hidden;border-right:0;
-  padding-bottom:10px;scrollbar-width:thin;
-  scrollbar-color:#3a465b transparent
-}
-.trade-heading{
-  padding:13px 14px;border-bottom:1px solid var(--line);
-  color:#42d4cc;font-size:12px
-}
-.trade-type{
-  height:44px;display:flex;align-items:center;
-  justify-content:space-between;padding:0 14px;
-  border-bottom:1px solid var(--line);font-size:13px
-}
-.type-icons{color:#00c49a;font-size:17px}
-.mode-block,.risk-fields{
-  padding:11px 14px;border-bottom:1px solid var(--line)
-}
-.field-caption{
-  display:flex;justify-content:space-between;
-  color:#91a2bc;font-size:11px;margin-bottom:8px
-}
-.field-caption small{font-size:9px}
-.segmented{
-  display:flex;background:#141b27;border-radius:7px;padding:3px;gap:3px
-}
-.segmented button{
-  flex:1;background:transparent;border:0;color:#8797b0;
-  padding:8px;border-radius:5px;font-size:11px
-}
-.segmented button.chosen{
-  background:#273142;color:white;font-weight:700
-}
-.risk-fields label{
-  display:grid;grid-template-columns:minmax(0,1fr) minmax(90px,1fr);
-  align-items:center;gap:8px;margin:3px 0 10px;
-  color:#a8b6ca;font-size:11px
-}
-.risk-fields label:last-child{margin-bottom:0}
-.risk-fields input{
-  width:100%;min-width:0;background:#141b27;
-  border:1px solid #344055;border-radius:7px;
-  padding:10px;color:white;font-size:12px
-}
-.stake-block{padding:11px 14px;border-bottom:1px solid var(--line)}
-.stake-controls{display:flex;gap:5px;margin-top:10px}
-.stake-controls>button,.stake-input{
-  height:38px;background:#141b27;border:1px solid #344055;
-  color:#dce7f6;border-radius:6px;padding:0 9px;font-size:11px
-}
-.stake-input{
-  display:flex;align-items:center;flex:1;min-width:0
-}
-.stake-input input{
-  width:100%;min-width:0;background:transparent;
-  border:0;color:white;outline:0
-}
-.scanner{
-  background:#28264d!important;border-color:#6156b8!important;
-  color:#b4a9ff!important;min-width:78px
-}
-.scanner small{display:block;font-size:8px;color:#9d9ac7}
-.last-session{
-  display:flex;justify-content:space-between;
-  padding:10px 14px;color:#8293ac;font-size:10px
-}
-.last-session b{color:#dbe4f1}
-.contract-card{margin:0 10px 9px;padding:11px;border-radius:8px}
-.even-card{background:#203843;border:1px solid #287d80}
-.odd-card{background:#392a39;border:1px solid #8e4052}
-.contract-title{display:flex;align-items:center;gap:8px;font-size:12px}
-.contract-title span{font-size:16px;color:#49c6c3}
-.odd-card .contract-title span{color:#ff6874}
-.contract-title i{height:6px;background:#55c4c0;border-radius:9px;flex:1}
-.odd-card .contract-title i{background:#f15a68}
-.contract-title strong{color:#49c6c3;font-size:11px}
-.odd-card .contract-title strong{color:#ff6571}
-.payout-line{
-  display:flex;justify-content:space-between;
-  padding:11px 3px 8px;color:#899ab4;font-size:10px
-}
-.payout-line b{color:white}
-.trade-button{
-  width:100%;padding:9px;border-radius:6px;
-  border:1px solid #3a4b5e;background:#263244;
-  color:white;font-size:11px;font-weight:800
-}
-.trade-button small{
-  display:block;color:#a4b3c7;font-size:9px;
-  font-weight:400;margin-top:3px
-}
-.trade-button:disabled{opacity:.78}
-.odd-button{background:#432b3a;border-color:#a13f52}
-.connection-note{
-  margin:7px 10px;padding:8px;border:1px solid #5a4b2e;
-  background:#302b20;color:#d6bd84;border-radius:6px;
-  font-size:9px;line-height:1.45
-}
-
-/* DEPOSIT POPUP */
-.modal-backdrop{
-  position:fixed;inset:0;z-index:20;display:flex;
-  justify-content:flex-end;align-items:stretch;
-  background:rgba(0,0,0,.58);backdrop-filter:blur(2px)
-}
-.deposit-modal{
-  width:min(100%,435px);height:100%;overflow-y:auto;
-  background:#202a3b;border-left:1px solid #344055;
-  box-shadow:-18px 0 45px #0005
-}
-.modal-header{
-  height:79px;padding:13px 15px;display:flex;
-  align-items:flex-start;justify-content:space-between;
-  border-bottom:1px solid #303b4e;background:#252f40
-}
-.modal-header h2{font-size:19px;margin:0 0 5px;color:#fff}
-.modal-header p{margin:0;color:#a5b2c5;font-size:13px}
-.modal-close{
-  border:0;background:transparent;color:#778397;
-  font-size:27px;line-height:1;padding:0 2px
-}
-.deposit-content{padding:18px 10px 16px}
-.modal-back{
-  border:0;background:transparent;color:#9ba8ba;
-  padding:3px 0 20px;font-size:13px
-}
-.modal-label{
-  display:block;margin:0 0 9px;color:#9ca8ba;
-  font-size:13px;font-weight:700
-}
-.amount-input-wrap{
-  height:50px;display:flex;align-items:center;gap:8px;
-  padding:0 14px;border:1px solid #344055;
-  border-radius:12px;background:#151d2a;color:#8995a8
-}
-.amount-input-wrap input{
-  width:100%;height:100%;border:0;outline:0;
-  background:transparent;color:#f2f5fa;
-  font-size:16px;font-weight:700
-}
-.amount-presets{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px}
-.amount-presets button{
-  height:34px;padding:0 12px;border:1px solid #303b4e;
-  border-radius:8px;background:#273244;color:#aeb9c9;font-size:13px
-}
-.amount-presets button:hover,.amount-presets button.active{
-  border-color:#45b8b1;color:#fff
-}
-.kes-estimate{margin:10px 0 20px;color:#7f8ba0;font-size:11px}
-.phone-input{
-  width:100%;height:50px;padding:0 15px;
-  border:1px solid #344055;border-radius:12px;
-  background:#151d2a;color:#f2f5fa;
-  font-size:15px;font-weight:700;outline:0
-}
-.phone-input:focus{border-color:#40b8b2}
-.phone-hint{display:block;margin-top:7px;color:#69768a;font-size:11px}
-.deposit-submit{
-  width:100%;height:57px;margin-top:17px;border:0;
-  border-radius:12px;background:linear-gradient(100deg,#4bb5b3,#32a5a4);
-  color:#fff;font-size:15px;font-weight:800
-}
-.deposit-message{
-  min-height:15px;margin:10px 0 0;color:#9ca8ba;
-  font-size:11px;line-height:1.45
-}
-
-/* OTHER ACCOUNT POPUPS */
-.account-modal{
-  width:min(100%,435px);height:100%;overflow-y:auto;
-  background:#202a3b;border-left:1px solid #344055
-}
-.account-modal-content{padding:18px}
-.account-panel-content p{color:#9ca8ba;font-size:13px;line-height:1.5}
-.secondary-btn{
-  background:#273244;border:1px solid #39465a;
-  color:#dce5f3;border-radius:7px;padding:10px 13px
-}
-.fx-preview{color:#8b98ac;font-size:12px;margin:10px 0}
-.history-empty{
-  padding:13px;background:#151d2a;border-radius:7px;color:#8292aa
-}
-.profile-details label{display:block;margin:10px 0;color:#9ca8ba}
-.profile-details input{
-  display:block;width:100%;margin-top:5px;padding:10px;
-  background:#151d2a;border:1px solid #344055;
-  border-radius:7px;color:#fff
-}
-.ai-chat-room{border:1px solid #354156;border-radius:9px;padding:10px}
-.ai-chat-messages{min-height:130px;max-height:40vh;overflow:auto}
-.ai-message{padding:10px;background:#151d2a;border-radius:8px;margin-bottom:8px}
-.ai-message p{margin:5px 0}
-.ai-quick-questions{display:flex;flex-wrap:wrap;gap:6px}
-.ai-quick-questions button,.clear-chat{
-  background:#273244;border:1px solid #39465a;
-  color:#cbd5e1;border-radius:7px;padding:7px;font-size:11px
-}
-.ai-chat-input{display:flex;gap:6px;margin-top:10px}
-.ai-chat-input input{
-  flex:1;min-width:0;padding:10px;border:1px solid #39465a;
-  border-radius:7px;background:#151d2a;color:white
-}
-.ai-chat-input button{
-  border:0;border-radius:7px;background:#00bd91;
-  padding:0 12px;color:#06241e
-}
-.clear-chat{margin-top:8px}
-.ai-disclaimer,.muted{color:#8492a8;font-size:11px}
-.toast{
-  position:fixed;z-index:40;left:50%;bottom:18px;
-  transform:translateX(-50%);background:#263449;
-  border:1px solid #43536d;color:white;padding:11px 16px;
-  border-radius:8px;box-shadow:0 8px 25px #0006;
-  opacity:0;pointer-events:none;transition:opacity .2s
-}
-.toast.show{opacity:1}
-.app-footer{height:0;overflow:hidden}
-
-/* LIGHT THEME */
-body.light{
-  --bg:#edf1f6;--panel:#fff;--text:#172033;
-  background:var(--bg);color:var(--text)
-}
-body.light .topbar,body.light .panel,body.light .chart-area{background:#e6ebf2}
-body.light .trade-panel{color:#172033}
-
-/* TABLET */
-@media(max-width:900px){
-  .topbar{gap:10px;padding:0 8px}
-  .main-nav{gap:12px}
-  .main-nav a{font-size:11px}
-  .workspace{grid-template-columns:170px minmax(260px,1fr) 270px}
-  .profile{display:none}
-}
-
-/* MOBILE */
-@media(max-width:680px){
-  html,body{height:auto;min-height:100%;overflow:auto}
-  .topbar{height:auto;min-height:48px;flex-wrap:wrap;padding:7px}
-  .main-nav{
-    order:3;width:100%;height:30px;
-    overflow-x:auto;gap:18px
+  * {
+    box-sizing: border-box;
   }
-  .top-actions{margin-left:auto}
-  .workspace{
-    display:flex;flex-direction:column;height:auto;
-    min-height:0;overflow:visible
+
+  html,
+  body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
   }
-  .chart-area{order:1;height:48vh;min-height:290px}
-  .positions{order:2;min-height:170px}
-  .trade-panel{order:3;overflow:visible}
-  .chart-tools{display:none}
-  .digit-strip{gap:3px}
-  .digit{width:29px;height:29px;font-size:9px}
-  .deposit-modal,.account-modal{width:100%;border-left:0}
-  .modal-backdrop{justify-content:center}
-  .deposit-content{padding:18px 10px}
-  .account-modal-content{padding:15px}
+
+  body {
+    font-size: 13px;
+  }
+
+  #app {
+    width: 100%;
+    max-width: 100%;
+    padding: 8px;
+    margin: 0 auto;
+    overflow-x: hidden;
+  }
+
+  header,
+  .header,
+  .topbar,
+  .navbar {
+    min-height: 48px;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  button,
+  .button,
+  .trade-button {
+    min-height: 44px;
+    border-radius: 10px;
+    font-size: 13px;
+  }
+
+  input,
+  select {
+    min-height: 42px;
+    max-width: 100%;
+    font-size: 14px;
+  }
+
+  .card,
+  .panel,
+  .contract-card,
+  .market-card {
+    width: 100%;
+    max-width: 100%;
+    margin-bottom: 10px;
+    border-radius: 12px;
+  }
+
+  /* Market information */
+
+  #marketPrice {
+    font-size: clamp(22px, 7vw, 32px);
+    font-weight: 800;
+    overflow-wrap: anywhere;
+  }
+
+  #marketChange {
+    font-size: 12px;
+  }
+
+  #marketChart {
+    width: 100% !important;
+    max-width: 100%;
+    max-height: 190px;
+  }
+
+  /* Digit circles */
+
+  .digit-strip {
+    display: grid !important;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 8px;
+    width: 100%;
+    overflow: visible;
+    padding: 8px 2px;
+  }
+
+  .digit {
+    width: 100%;
+    min-width: 0;
+    min-height: 55px;
+    height: auto;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 3px;
+    font-size: 17px;
+    font-weight: 800;
+  }
+
+  .digit small {
+    font-size: 10px;
+    font-weight: 600;
+  }
+
+  /* Trading controls */
+
+  .trade-button {
+    width: 100%;
+    padding: 12px 6px;
+    font-weight: 800;
+  }
+
+  .contract-card {
+    padding: 10px;
+  }
+
+  .contract-card h3 {
+    font-size: 15px;
+  }
+
+  /* Positions */
+
+  .tabs {
+    display: flex;
+    width: 100%;
+    gap: 5px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .tab {
+    flex: 1;
+    min-width: 0;
+    padding: 10px 5px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  /* Account and balance */
+
+  #balanceValue {
+    font-size: 19px;
+    font-weight: 800;
+    overflow-wrap: anywhere;
+  }
+
+  /* Forms and popups */
+
+  .modal,
+  .popup,
+  .deposit-modal {
+    width: calc(100% - 20px);
+    max-width: 420px;
+    max-height: 85vh;
+    overflow-y: auto;
+  }
+
+  /* Prevent oversized content */
+
+  img,
+  canvas,
+  svg,
+  table {
+    max-width: 100%;
+  }
+
+  table {
+    display: block;
+    overflow-x: auto;
+  }
+
+  /* Better touch experience */
+
+  button,
+  .tab,
+  select,
+  input {
+    touch-action: manipulation;
+  }
+
 }
 
-/* FIT THE COMPLETE TRADING TICKET ON DESKTOP */
-@media(min-width:681px){
-  .trade-panel{overflow:hidden;padding-bottom:3px}
-  .trade-heading{padding:8px 11px;font-size:11px}
-  .trade-type{height:34px;padding:0 11px;font-size:12px}
-  .mode-block,.risk-fields,.stake-block{padding:7px 10px}
-  .field-caption{margin-bottom:5px;font-size:10px}
-  .segmented button{padding:6px;font-size:10px}
-  .risk-fields label{margin:1px 0 5px;font-size:9px;gap:5px}
-  .risk-fields input{padding:7px;font-size:11px}
-  .stake-controls{margin-top:6px;gap:4px}
-  .stake-controls>button,.stake-input{height:31px;padding:0 6px}
-  .scanner{min-width:68px}
-  .last-session{padding:6px 10px;font-size:9px}
-  .contract-card{margin:0 8px 5px;padding:7px}
-  .contract-title{font-size:10px;gap:6px}
-  .contract-title span{font-size:14px}
-  .payout-line{padding:7px 2px 5px;font-size:9px}
-  .trade-button{padding:6px;font-size:10px}
-  .trade-button small{font-size:8px;margin-top:2px}
-  .connection-note{margin:4px 8px;padding:5px;font-size:8px}
+/* Extra-small Android phones */
+
+@media (max-width: 360px) {
+
+  #app {
+    padding: 5px;
+  }
+
+  .digit-strip {
+    gap: 5px;
+  }
+
+  .digit {
+    min-height: 49px;
+    font-size: 15px;
+  }
+
+  .digit small {
+    font-size: 9px;
+  }
+
+  .trade-button {
+    font-size: 12px;
+  }
+
 }
