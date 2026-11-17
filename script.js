@@ -1,7 +1,7 @@
 /* =====================================================
    TRADE MASTER
    SUPABASE + MPESA + DERIV + LIVE MARKET
-   DEMO WALLET + DEMO TRADING
+   DEMO WALLET + DEMO TRADING — UPDATED
 ===================================================== */
 
 // ==========================================
@@ -55,6 +55,7 @@ let marketLastPrice = null;
 let tradeMasterAccountMode = "REAL";
 let demoWalletBalance = 10000;
 let demoTradeBusy = false;
+let demoTradePending = false;
 
 // ==========================================
 // CONNECT SUPABASE
@@ -157,95 +158,99 @@ function setSignupMode() {
   authMessage("");
 }
 
-$("switchAuth").addEventListener("click", setSignupMode);
+if ($("switchAuth")) {
+  $("switchAuth").addEventListener("click", setSignupMode);
+}
 
 // ==========================================
 // AUTHENTICATION
 // ==========================================
 
-$("authForm").addEventListener("submit", async (event) => {
-  event.preventDefault();
+if ($("authForm")) {
+  $("authForm").addEventListener("submit", async (event) => {
+    event.preventDefault();
 
-  if (!supabaseClient) {
-    return authMessage(
-      "Supabase connection is unavailable. Check your Supabase library and configuration."
-    );
-  }
-
-  const email = $("authEmail").value.trim().toLowerCase();
-  const password = $("authPassword").value;
-
-  try {
-    $("authSubmit").disabled = true;
-    $("authSubmit").textContent = "Please wait...";
-
-    if (isSignup) {
-      const age = Number($("authAge").value);
-
-      if (
-        !$("fullName").value.trim() ||
-        !$("authPhone").value.trim() ||
-        !age ||
-        age < 18 ||
-        age > 100
-      ) {
-        throw new Error(
-          "Enter your name, phone number and a valid age (18+)."
-        );
-      }
-
-      const { data, error } =
-        await supabaseClient.auth.signUp({
-          email,
-          password,
-          options: {
-            data: {
-              full_name: $("fullName").value.trim(),
-              phone: $("authPhone").value.trim(),
-              age: age
-            }
-          }
-        });
-
-      if (error) throw error;
-
-      if (!data.session) {
-        authMessage(
-          "Account created. Check your email to confirm, then log in.",
-          false
-        );
-        return;
-      }
-
-      currentSession = data.session;
-
-    } else {
-      const { data, error } =
-        await supabaseClient.auth.signInWithPassword({
-          email,
-          password
-        });
-
-      if (error) throw error;
-
-      currentSession = data.session;
+    if (!supabaseClient) {
+      return authMessage(
+        "Supabase connection is unavailable. Check your configuration."
+      );
     }
 
-    await loadProfile();
-    enterDashboard();
+    const email = $("authEmail").value.trim().toLowerCase();
+    const password = $("authPassword").value;
 
-  } catch (error) {
-    console.error("Authentication error:", error);
-    authMessage(error.message || "Unable to authenticate.");
+    try {
+      $("authSubmit").disabled = true;
+      $("authSubmit").textContent = "Please wait...";
 
-  } finally {
-    $("authSubmit").disabled = false;
+      if (isSignup) {
+        const age = Number($("authAge").value);
 
-    $("authSubmit").textContent = isSignup
-      ? "Create Account"
-      : "Login";
-  }
-});
+        if (
+          !$("fullName").value.trim() ||
+          !$("authPhone").value.trim() ||
+          !age ||
+          age < 18 ||
+          age > 100
+        ) {
+          throw new Error(
+            "Enter your name, phone number and a valid age (18+)."
+          );
+        }
+
+        const { data, error } =
+          await supabaseClient.auth.signUp({
+            email,
+            password,
+            options: {
+              data: {
+                full_name: $("fullName").value.trim(),
+                phone: $("authPhone").value.trim(),
+                age
+              }
+            }
+          });
+
+        if (error) throw error;
+
+        if (!data.session) {
+          authMessage(
+            "Account created. Check your email to confirm, then log in.",
+            false
+          );
+          return;
+        }
+
+        currentSession = data.session;
+
+      } else {
+        const { data, error } =
+          await supabaseClient.auth.signInWithPassword({
+            email,
+            password
+          });
+
+        if (error) throw error;
+
+        currentSession = data.session;
+      }
+
+      await loadProfile();
+      enterDashboard();
+
+    } catch (error) {
+      console.error("Authentication error:", error);
+      authMessage(error.message || "Unable to authenticate.");
+
+    } finally {
+      $("authSubmit").disabled = false;
+
+      $("authSubmit").textContent = isSignup
+        ? "Create Account"
+        : "Login";
+    }
+  });
+}
 
 // ==========================================
 // LOAD USER PROFILE
@@ -281,13 +286,29 @@ async function loadProfile() {
 function enterDashboard() {
   showApp();
 
-  $("profileName").value = currentProfile.name || "";
-  $("profileEmail").value = currentProfile.email || "";
-  $("profilePhone").value = currentProfile.phone || "";
-  $("profileAge").value = currentProfile.age || "";
+  if ($("profileName")) {
+    $("profileName").value = currentProfile.name || "";
+  }
 
-  $("profileBalance").value = "Loading REAL balance...";
-  $("balanceValue").textContent = "Loading REAL balance...";
+  if ($("profileEmail")) {
+    $("profileEmail").value = currentProfile.email || "";
+  }
+
+  if ($("profilePhone")) {
+    $("profilePhone").value = currentProfile.phone || "";
+  }
+
+  if ($("profileAge")) {
+    $("profileAge").value = currentProfile.age || "";
+  }
+
+  if ($("profileBalance")) {
+    $("profileBalance").value = "Loading REAL balance...";
+  }
+
+  if ($("balanceValue")) {
+    $("balanceValue").textContent = "Loading REAL balance...";
+  }
 
   renderChart();
   renderDigits();
@@ -305,6 +326,9 @@ function enterDashboard() {
 
 async function loadDerivAccounts() {
   if (!supabaseClient || !currentSession) return;
+
+  // Do not overwrite the Demo account display.
+  if (tradeMasterAccountMode !== "REAL") return;
 
   const balanceElement = $("balanceValue");
   const profileBalanceElement = $("profileBalance");
@@ -382,8 +406,12 @@ async function loadDerivAccounts() {
 
     const display = accountLines.join(" | ");
 
-    if (balanceElement) {
-      balanceElement.textContent = display;
+    // Check again in case the user switched accounts
+    // while the network request was running.
+    if (tradeMasterAccountMode === "REAL") {
+      if (balanceElement) {
+        balanceElement.textContent = display;
+      }
     }
 
     if (profileBalanceElement) {
@@ -395,20 +423,16 @@ async function loadDerivAccounts() {
       realAccounts.length
     );
 
-    toast("REAL Deriv balance loaded.");
-
   } catch (error) {
     console.error("Deriv balance error:", error);
 
-    if (balanceElement) {
+    if (tradeMasterAccountMode === "REAL" && balanceElement) {
       balanceElement.textContent = "REAL balance unavailable";
     }
 
     if (profileBalanceElement) {
       profileBalanceElement.value = "Unavailable";
     }
-
-    toast(error.message || "Unable to load REAL balance.");
   }
 }
 
@@ -439,8 +463,6 @@ function connectDerivMarket() {
       marketReconnectDelay = 3000;
 
       setMarketStatus("Live market connected");
-
-      console.log("Deriv market connected.");
 
       marketSocket.send(JSON.stringify({
         ticks_history: DERIV_MARKET_SYMBOL,
@@ -485,6 +507,7 @@ function connectDerivMarket() {
 
         updateLiveChart();
         updateDigitStrip();
+        updateDemoMarketDisplay();
 
         if (
           marketSocket &&
@@ -498,11 +521,6 @@ function connectDerivMarket() {
         }
 
         setMarketStatus("Live market running");
-
-        console.log(
-          "Market history loaded:",
-          marketPrices.length
-        );
 
         return;
       }
@@ -535,6 +553,7 @@ function connectDerivMarket() {
 
         updateLiveChart();
         updateDigitStrip();
+        updateDemoMarketDisplay();
 
         setMarketStatus("Live market running");
       }
@@ -551,8 +570,6 @@ function connectDerivMarket() {
       setMarketStatus(
         "Market disconnected. Reconnecting..."
       );
-
-      console.log("Deriv market disconnected.");
 
       scheduleMarketReconnect();
     };
@@ -593,8 +610,6 @@ function setMarketStatus(status) {
   if (statusElement) {
     statusElement.textContent = status;
   }
-
-  console.log("Market status:", status);
 }
 
 // ==========================================
@@ -735,27 +750,33 @@ async function signOut() {
   closeModals();
 }
 
-$("logoutBtn").addEventListener("click", signOut);
+if ($("logoutBtn")) {
+  $("logoutBtn").addEventListener("click", signOut);
+}
 
-$("profileLogoutBtn").addEventListener("click", signOut);
+if ($("profileLogoutBtn")) {
+  $("profileLogoutBtn").addEventListener("click", signOut);
+}
 
 // ==========================================
 // MODAL NAVIGATION
 // ==========================================
 
 function openDeposit() {
+  if (!$("depositModal")) return;
+
   $("depositModal").hidden = false;
 
   updateDepositEstimate();
 
   setTimeout(() => {
-    $("depositAmount").focus();
+    if ($("depositAmount")) $("depositAmount").focus();
   }, 30);
 }
 
 function closeModals() {
-  $("depositModal").hidden = true;
-  $("accountModal").hidden = true;
+  if ($("depositModal")) $("depositModal").hidden = true;
+  if ($("accountModal")) $("accountModal").hidden = true;
 }
 
 document.querySelectorAll("[data-open-deposit]")
@@ -776,22 +797,24 @@ document.querySelectorAll("[data-close-account]")
     btn.addEventListener("click", closeModals);
   });
 
-$("depositModal").addEventListener("click", event => {
-  if (event.target === $("depositModal")) {
-    closeModals();
-  }
-});
+if ($("depositModal")) {
+  $("depositModal").addEventListener("click", event => {
+    if (event.target === $("depositModal")) {
+      closeModals();
+    }
+  });
+}
 
-$("accountModal").addEventListener("click", event => {
-  if (event.target === $("accountModal")) {
-    closeModals();
-  }
-});
+if ($("accountModal")) {
+  $("accountModal").addEventListener("click", event => {
+    if (event.target === $("accountModal")) {
+      closeModals();
+    }
+  });
+}
 
 document.addEventListener("keydown", event => {
-  if (event.key === "Escape") {
-    closeModals();
-  }
+  if (event.key === "Escape") closeModals();
 });
 
 // ==========================================
@@ -812,18 +835,25 @@ function openAccountPanel(name) {
     "chat",
     "profile"
   ].forEach(key => {
-    $(key + "Panel").hidden = key !== name;
+    const panel = $(key + "Panel");
+    if (panel) panel.hidden = key !== name;
   });
 
-  $("accountModalTitle").textContent =
-    names[name] || "Account";
+  if ($("accountModalTitle")) {
+    $("accountModalTitle").textContent =
+      names[name] || "Account";
+  }
 
-  $("accountModalSubtitle").textContent =
-    name === "profile"
-      ? (currentProfile.email || "Your account")
-      : "Trade Master";
+  if ($("accountModalSubtitle")) {
+    $("accountModalSubtitle").textContent =
+      name === "profile"
+        ? (currentProfile.email || "Your account")
+        : "Trade Master";
+  }
 
-  $("accountModal").hidden = false;
+  if ($("accountModal")) {
+    $("accountModal").hidden = false;
+  }
 }
 
 document.querySelectorAll("[data-open-panel]")
@@ -839,6 +869,8 @@ document.querySelectorAll("[data-open-panel]")
 // ==========================================
 
 function updateDepositEstimate() {
+  if (!$("depositAmount")) return;
+
   const amount = Math.max(
     0,
     Number($("depositAmount").value) || 0
@@ -846,20 +878,26 @@ function updateDepositEstimate() {
 
   const kes = amount * usdKesRate;
 
-  $("depositFx").textContent =
-    "≈ KES " + kes.toLocaleString("en-KE", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    });
+  if ($("depositFx")) {
+    $("depositFx").textContent =
+      "≈ KES " + kes.toLocaleString("en-KE", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
+      });
+  }
 
-  $("depositBtn").textContent =
-    "Deposit " + money(amount);
+  if ($("depositBtn")) {
+    $("depositBtn").textContent =
+      "Deposit " + money(amount);
+  }
 }
 
-$("depositAmount").addEventListener(
-  "input",
-  updateDepositEstimate
-);
+if ($("depositAmount")) {
+  $("depositAmount").addEventListener(
+    "input",
+    updateDepositEstimate
+  );
+}
 
 // ==========================================
 // PRESET AMOUNTS
@@ -985,87 +1023,89 @@ async function getDepositErrorMessage(error) {
 // REQUEST MPESA PAYMENT
 // ==========================================
 
-$("depositBtn").addEventListener("click", async () => {
-  const amountUsd = Number($("depositAmount").value);
+if ($("depositBtn")) {
+  $("depositBtn").addEventListener("click", async () => {
+    const amountUsd = Number($("depositAmount").value);
 
-  const phone = normalizeKenyanPhone(
-    $("mpesaPhone").value
-  );
+    const phone = normalizeKenyanPhone(
+      $("mpesaPhone").value
+    );
 
-  if (!Number.isFinite(amountUsd) || amountUsd < 1) {
-    $("depositMsg").textContent =
-      "Enter a valid deposit amount of at least $1.";
-    return;
-  }
+    if (!Number.isFinite(amountUsd) || amountUsd < 1) {
+      $("depositMsg").textContent =
+        "Enter a valid deposit amount of at least $1.";
+      return;
+    }
 
-  if (!phone) {
-    $("depositMsg").textContent =
-      "Enter a valid Kenyan M-Pesa number, for example 254712345678.";
-    return;
-  }
+    if (!phone) {
+      $("depositMsg").textContent =
+        "Enter a valid Kenyan M-Pesa number, for example 254712345678.";
+      return;
+    }
 
-  if (!supabaseClient || !currentSession) {
-    $("depositMsg").textContent =
-      "Please log in with your Supabase account before requesting a deposit.";
-    return;
-  }
+    if (!supabaseClient || !currentSession) {
+      $("depositMsg").textContent =
+        "Please log in before requesting a deposit.";
+      return;
+    }
 
-  const amountKes = Math.round(amountUsd * usdKesRate);
+    const amountKes = Math.round(amountUsd * usdKesRate);
 
-  try {
-    $("depositBtn").disabled = true;
-    $("depositBtn").textContent = "Requesting M-Pesa...";
+    try {
+      $("depositBtn").disabled = true;
+      $("depositBtn").textContent = "Requesting M-Pesa...";
 
-    const { data, error } =
-      await supabaseClient.functions.invoke(
-        "mpesa-stk-push",
-        {
-          body: {
-            phone: phone,
-            amount: amountKes,
-            amount_usd: amountUsd,
-            currency: "KES"
+      const { data, error } =
+        await supabaseClient.functions.invoke(
+          "mpesa-stk-push",
+          {
+            body: {
+              phone,
+              amount: amountKes,
+              amount_usd: amountUsd,
+              currency: "KES"
+            }
           }
-        }
-      );
+        );
 
-    if (error) {
-      const actualMessage =
-        await getDepositErrorMessage(error);
+      if (error) {
+        const actualMessage =
+          await getDepositErrorMessage(error);
 
-      throw new Error(actualMessage);
+        throw new Error(actualMessage);
+      }
+
+      if (!data) {
+        throw new Error(
+          "The payment function returned an empty response."
+        );
+      }
+
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      $("depositMsg").textContent =
+        data.message ||
+        "M-Pesa request submitted. Check your phone and approve only if the amount and business details are correct.";
+
+      toast("M-Pesa request sent. Await payment confirmation.");
+
+    } catch (error) {
+      console.error("Deposit request failed:", error);
+
+      $("depositMsg").textContent =
+        error.message ||
+        "Unable to start the M-Pesa request.";
+
+      toast(error.message || "M-Pesa request failed.");
+
+    } finally {
+      $("depositBtn").disabled = false;
+      updateDepositEstimate();
     }
-
-    if (!data) {
-      throw new Error(
-        "The payment function returned an empty response."
-      );
-    }
-
-    if (data.error) {
-      throw new Error(data.error);
-    }
-
-    $("depositMsg").textContent =
-      data.message ||
-      "M-Pesa request submitted. Check your phone and approve only if the amount and business details are correct.";
-
-    toast("M-Pesa request sent. Await payment confirmation.");
-
-  } catch (error) {
-    console.error("Deposit request failed:", error);
-
-    $("depositMsg").textContent =
-      error.message ||
-      "Unable to start the M-Pesa request. Please try again.";
-
-    toast(error.message || "M-Pesa request failed.");
-
-  } finally {
-    $("depositBtn").disabled = false;
-    updateDepositEstimate();
-  }
-});
+  });
+}
 
 // ==========================================
 // MARKET CHART
@@ -1079,9 +1119,7 @@ function renderChart() {
     return;
   }
 
-  if (chart) {
-    chart.destroy();
-  }
+  if (chart) chart.destroy();
 
   chart = new Chart(canvas, {
     type: "line",
@@ -1107,20 +1145,14 @@ function renderChart() {
       animation: false,
 
       plugins: {
-        legend: {
-          display: false
-        },
-        tooltip: {
-          enabled: true
-        }
+        legend: { display: false },
+        tooltip: { enabled: true }
       },
 
       scales: {
         x: {
           display: false,
-          grid: {
-            display: false
-          }
+          grid: { display: false }
         },
 
         y: {
@@ -1128,9 +1160,7 @@ function renderChart() {
           ticks: {
             color: "#8b98ac",
             maxTicksLimit: 6,
-            font: {
-              size: 9
-            }
+            font: { size: 9 }
           },
           grid: {
             color: "rgba(100,120,150,.10)"
@@ -1140,10 +1170,8 @@ function renderChart() {
     }
   });
 
-  const priceElement = $("marketPrice");
-
-  if (priceElement) {
-    priceElement.textContent = "Connecting...";
+  if ($("marketPrice")) {
+    $("marketPrice").textContent = "Connecting...";
   }
 }
 
@@ -1165,9 +1193,9 @@ updateClock();
 // STAKE AND PAYOUT
 // ==========================================
 
-$("stake").addEventListener("input", updatePayout);
-
 function updatePayout() {
+  if (!$("stake")) return;
+
   const stake = Math.max(
     0,
     Number($("stake").value) || 0
@@ -1175,35 +1203,51 @@ function updatePayout() {
 
   const payout = money(stake * 1.9522);
 
-  $("evenPayout").textContent = payout;
-  $("oddPayout").textContent = payout;
+  if ($("evenPayout")) {
+    $("evenPayout").textContent = payout;
+  }
+
+  if ($("oddPayout")) {
+    $("oddPayout").textContent = payout;
+  }
 }
 
-$("minusStake").addEventListener("click", () => {
-  $("stake").value = Math.max(
-    0.35,
-    (Number($("stake").value) || 1) - 0.1
-  ).toFixed(2);
+if ($("stake")) {
+  $("stake").addEventListener("input", updatePayout);
+}
 
-  updatePayout();
-});
+if ($("minusStake")) {
+  $("minusStake").addEventListener("click", () => {
+    $("stake").value = Math.max(
+      0.35,
+      (Number($("stake").value) || 1) - 0.1
+    ).toFixed(2);
 
-$("plusStake").addEventListener("click", () => {
-  $("stake").value = (
-    (Number($("stake").value) || 1) + 0.1
-  ).toFixed(2);
+    updatePayout();
+  });
+}
 
-  updatePayout();
-});
+if ($("plusStake")) {
+  $("plusStake").addEventListener("click", () => {
+    $("stake").value = (
+      (Number($("stake").value) || 1) + 0.1
+    ).toFixed(2);
+
+    updatePayout();
+  });
+}
 
 // ==========================================
 // TRADE MODE AND STAKE MODE
 // ==========================================
 
 ["tradeMode", "stakeMode"].forEach(id => {
-  $(id).querySelectorAll("button").forEach(btn => {
+  const container = $(id);
+  if (!container) return;
+
+  container.querySelectorAll("button").forEach(btn => {
     btn.addEventListener("click", () => {
-      $(id).querySelectorAll("button").forEach(b => {
+      container.querySelectorAll("button").forEach(b => {
         b.classList.remove("chosen");
       });
 
@@ -1220,9 +1264,7 @@ document.querySelectorAll(".tabs .tab")
   .forEach(btn => {
     btn.addEventListener("click", () => {
       document.querySelectorAll(".tabs .tab")
-        .forEach(b => {
-          b.classList.remove("selected");
-        });
+        .forEach(b => b.classList.remove("selected"));
 
       btn.classList.add("selected");
 
@@ -1244,11 +1286,13 @@ document.querySelectorAll(".tabs .tab")
       const [title, sub] =
         states[btn.dataset.tab] || states.open;
 
-      $("positionsState").innerHTML = `
-        <div class="target">◎</div>
-        <strong>${title}</strong>
-        <span>${sub}</span>
-      `;
+      if ($("positionsState")) {
+        $("positionsState").innerHTML = `
+          <div class="target">◎</div>
+          <strong>${title}</strong>
+          <span>${sub}</span>
+        `;
+      }
     });
   });
 
@@ -1256,19 +1300,23 @@ document.querySelectorAll(".tabs .tab")
 // THEME
 // ==========================================
 
-$("themeBtn").addEventListener("click", () => {
-  document.body.classList.toggle("light");
-});
+if ($("themeBtn")) {
+  $("themeBtn").addEventListener("click", () => {
+    document.body.classList.toggle("light");
+  });
+}
 
 // ==========================================
 // AI SCANNER
 // ==========================================
 
-$("scannerBtn").addEventListener("click", () => {
-  toast(
-    "Scanner is in preview mode until its analysis engine is connected."
-  );
-});
+if ($("scannerBtn")) {
+  $("scannerBtn").addEventListener("click", () => {
+    toast(
+      "Scanner is in preview mode until its analysis engine is connected."
+    );
+  });
+}
 
 // ==========================================
 // TRADE MASTER AI SUPPORT
@@ -1276,6 +1324,8 @@ $("scannerBtn").addEventListener("click", () => {
 
 function addChatMessage(text, who) {
   const box = $("aiMessages");
+  if (!box) return;
+
   const div = document.createElement("div");
 
   div.className =
@@ -1300,7 +1350,7 @@ function answerQuestion(q) {
   const s = q.toLowerCase();
 
   if (s.includes("even") || s.includes("odd")) {
-    return "Even/Odd contracts predict whether the last digit of a market tick is even or odd. The live chart displays market prices. Demo trades are simulated and do not represent official Deriv contracts.";
+    return "Even/Odd contracts predict whether the last digit of a market tick is even or odd. Demo trades on Trade Master are simulated and do not represent official Deriv contracts.";
   }
 
   if (s.includes("volatil")) {
@@ -1336,31 +1386,34 @@ document.querySelectorAll("[data-ai-question]")
 // CHAT FORM
 // ==========================================
 
-$("aiChatForm").addEventListener("submit", event => {
-  event.preventDefault();
+if ($("aiChatForm")) {
+  $("aiChatForm").addEventListener("submit", event => {
+    event.preventDefault();
 
-  const q = $("aiInput").value.trim();
+    const q = $("aiInput").value.trim();
+    if (!q) return;
 
-  if (!q) return;
+    addChatMessage(q, "user");
+    addChatMessage(answerQuestion(q), "bot");
 
-  addChatMessage(q, "user");
-  addChatMessage(answerQuestion(q), "bot");
-
-  $("aiInput").value = "";
-});
+    $("aiInput").value = "";
+  });
+}
 
 // ==========================================
 // CLEAR CHAT
 // ==========================================
 
-$("clearAIChat").addEventListener("click", () => {
-  $("aiMessages").innerHTML = "";
+if ($("clearAIChat")) {
+  $("clearAIChat").addEventListener("click", () => {
+    $("aiMessages").innerHTML = "";
 
-  addChatMessage(
-    "Hello! Welcome to Trade Master. How can I help you today?",
-    "bot"
-  );
-});
+    addChatMessage(
+      "Hello! Welcome to Trade Master. How can I help you today?",
+      "bot"
+    );
+  });
+}
 
 // ==========================================
 // PROFILE EDITING
@@ -1369,78 +1422,84 @@ $("clearAIChat").addEventListener("click", () => {
 function setProfileEditing(enabled) {
   ["profileName", "profilePhone", "profileAge"]
     .forEach(id => {
-      $(id).readOnly = !enabled;
+      if ($(id)) $(id).readOnly = !enabled;
     });
 
-  $("editProfileBtn").hidden = enabled;
-  $("saveProfileBtn").hidden = !enabled;
-  $("cancelProfileBtn").hidden = !enabled;
+  if ($("editProfileBtn")) $("editProfileBtn").hidden = enabled;
+  if ($("saveProfileBtn")) $("saveProfileBtn").hidden = !enabled;
+  if ($("cancelProfileBtn")) $("cancelProfileBtn").hidden = !enabled;
 }
 
-$("editProfileBtn").addEventListener("click", () => {
-  setProfileEditing(true);
-
-  $("profileMessage").textContent =
-    "Edit your name, phone number or age, then save.";
-});
-
-$("cancelProfileBtn").addEventListener("click", () => {
-  $("profileName").value = currentProfile.name || "";
-  $("profilePhone").value = currentProfile.phone || "";
-  $("profileAge").value = currentProfile.age || "";
-
-  setProfileEditing(false);
-
-  $("profileMessage").textContent = "Changes cancelled.";
-});
-
-$("saveProfileBtn").addEventListener("click", async () => {
-  if (!supabaseClient) return;
-
-  const name = $("profileName").value.trim();
-  const phone = $("profilePhone").value.trim();
-  const age = Number($("profileAge").value);
-
-  if (!name || !phone || !age || age < 18 || age > 100) {
-    $("profileMessage").textContent =
-      "Enter a valid name, phone number and age (18+).";
-    return;
-  }
-
-  try {
-    $("saveProfileBtn").disabled = true;
-
-    const { error } =
-      await supabaseClient.auth.updateUser({
-        data: {
-          full_name: name,
-          phone: phone,
-          age: age
-        }
-      });
-
-    if (error) throw error;
-
-    currentProfile.name = name;
-    currentProfile.phone = phone;
-    currentProfile.age = age;
+if ($("editProfileBtn")) {
+  $("editProfileBtn").addEventListener("click", () => {
+    setProfileEditing(true);
 
     $("profileMessage").textContent =
-      "Profile updated successfully.";
+      "Edit your name, phone number or age, then save.";
+  });
+}
+
+if ($("cancelProfileBtn")) {
+  $("cancelProfileBtn").addEventListener("click", () => {
+    $("profileName").value = currentProfile.name || "";
+    $("profilePhone").value = currentProfile.phone || "";
+    $("profileAge").value = currentProfile.age || "";
 
     setProfileEditing(false);
-    toast("Profile updated.");
 
-  } catch (error) {
-    console.error("Profile update error:", error);
+    $("profileMessage").textContent = "Changes cancelled.";
+  });
+}
 
-    $("profileMessage").textContent =
-      error.message || "Unable to update profile.";
+if ($("saveProfileBtn")) {
+  $("saveProfileBtn").addEventListener("click", async () => {
+    if (!supabaseClient) return;
 
-  } finally {
-    $("saveProfileBtn").disabled = false;
-  }
-});
+    const name = $("profileName").value.trim();
+    const phone = $("profilePhone").value.trim();
+    const age = Number($("profileAge").value);
+
+    if (!name || !phone || !age || age < 18 || age > 100) {
+      $("profileMessage").textContent =
+        "Enter a valid name, phone number and age (18+).";
+      return;
+    }
+
+    try {
+      $("saveProfileBtn").disabled = true;
+
+      const { error } =
+        await supabaseClient.auth.updateUser({
+          data: {
+            full_name: name,
+            phone,
+            age
+          }
+        });
+
+      if (error) throw error;
+
+      currentProfile.name = name;
+      currentProfile.phone = phone;
+      currentProfile.age = age;
+
+      $("profileMessage").textContent =
+        "Profile updated successfully.";
+
+      setProfileEditing(false);
+      toast("Profile updated.");
+
+    } catch (error) {
+      console.error("Profile update error:", error);
+
+      $("profileMessage").textContent =
+        error.message || "Unable to update profile.";
+
+    } finally {
+      $("saveProfileBtn").disabled = false;
+    }
+  });
+}
 
 // =====================================================
 // DEMO ACCOUNT STYLES
@@ -1485,11 +1544,13 @@ function addDemoStyles() {
       border:1px solid #30435a;
       border-radius:14px;
       background:#142131;
+      color:#f1f5f9;
     }
 
     .tm-demo-panel h3 {
       margin:0 0 8px;
       font-size:15px;
+      color:#f1f5f9;
     }
 
     .tm-demo-balance {
@@ -1497,6 +1558,37 @@ function addDemoStyles() {
       font-weight:900;
       margin:8px 0;
       color:#42d4b7;
+    }
+
+    .tm-demo-market {
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      padding:10px;
+      margin-top:12px;
+      background:#0b1626;
+      border:1px solid #30435a;
+      border-radius:10px;
+    }
+
+    .tm-demo-market-price {
+      font-size:17px;
+      font-weight:900;
+      color:#f1f5f9;
+    }
+
+    .tm-demo-market-digit {
+      width:36px;
+      height:36px;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      border-radius:50%;
+      background:#087f68;
+      color:white;
+      font-size:18px;
+      font-weight:900;
     }
 
     .tm-demo-actions {
@@ -1515,8 +1607,13 @@ function addDemoStyles() {
       color:white;
     }
 
-    .tm-demo-even { background:#087f68; }
-    .tm-demo-odd { background:#2765bb; }
+    .tm-demo-even {
+      background:#087f68;
+    }
+
+    .tm-demo-odd {
+      background:#2765bb;
+    }
 
     .tm-demo-actions button:disabled {
       opacity:.5;
@@ -1528,31 +1625,46 @@ function addDemoStyles() {
       padding:12px;
       border-radius:10px;
       display:none;
-      font-weight:800;
+      font-weight:900;
     }
 
     .tm-demo-result.win {
       display:block;
       color:#42e6a4;
       background:rgba(0,200,130,.12);
-      box-shadow:0 0 15px rgba(0,200,130,.18);
+      border:1px solid rgba(0,220,150,.35);
+      box-shadow:0 0 18px rgba(0,220,150,.25);
+      animation:tmWinGlow 1.4s ease-in-out infinite alternate;
     }
 
     .tm-demo-result.loss {
       display:block;
       color:#ff6675;
       background:rgba(255,60,80,.12);
-      box-shadow:0 0 15px rgba(255,60,80,.18);
+      border:1px solid rgba(255,60,80,.35);
+      box-shadow:0 0 18px rgba(255,60,80,.22);
+      animation:tmLossGlow 1.4s ease-in-out infinite alternate;
     }
 
     .tm-demo-result.pending {
       display:block;
       color:#f3c969;
       background:rgba(243,201,105,.10);
+      border:1px solid rgba(243,201,105,.25);
+    }
+
+    @keyframes tmWinGlow {
+      from { box-shadow:0 0 5px rgba(0,220,150,.12); }
+      to { box-shadow:0 0 20px rgba(0,220,150,.4); }
+    }
+
+    @keyframes tmLossGlow {
+      from { box-shadow:0 0 5px rgba(255,60,80,.12); }
+      to { box-shadow:0 0 20px rgba(255,60,80,.4); }
     }
 
     .tm-demo-history {
-      margin-top:12px;
+      margin-top:14px;
       font-size:12px;
     }
 
@@ -1564,11 +1676,34 @@ function addDemoStyles() {
       border-bottom:1px solid #30435a;
     }
 
-    .tm-demo-history-row .won { color:#42e6a4; }
-    .tm-demo-history-row .lost { color:#ff6675; }
+    .tm-demo-history-row .won {
+      color:#42e6a4;
+      font-weight:900;
+    }
+
+    .tm-demo-history-row .lost {
+      color:#ff6675;
+      font-weight:900;
+    }
+
+    .tm-demo-history-row .open {
+      color:#f3c969;
+      font-weight:900;
+    }
 
     .tm-demo-hidden {
       display:none!important;
+    }
+
+    @media(max-width:600px) {
+      .tm-demo-panel {
+        width:100%;
+        padding:12px;
+      }
+
+      .tm-demo-balance {
+        font-size:22px;
+      }
     }
   `;
 
@@ -1594,6 +1729,7 @@ function createDemoInterface() {
     <button type="button" id="tmRealMode" class="active">
       R Real
     </button>
+
     <button type="button" id="tmDemoMode">
       D Demo
     </button>
@@ -1601,7 +1737,7 @@ function createDemoInterface() {
 
   if (topActions) {
     topActions.prepend(switcher);
-  } else {
+  } else if ($("app")) {
     $("app").prepend(switcher);
   }
 
@@ -1617,6 +1753,22 @@ function createDemoInterface() {
     </div>
 
     <small>Virtual funds · Simulated trading</small>
+
+    <div class="tm-demo-market">
+      <div>
+        <small>Live market price</small>
+        <div class="tm-demo-market-price" id="tmDemoMarketPrice">
+          Waiting for market...
+        </div>
+      </div>
+
+      <div>
+        <small>Last digit</small>
+        <div class="tm-demo-market-digit" id="tmDemoMarketDigit">
+          -
+        </div>
+      </div>
+    </div>
 
     <div class="tm-demo-actions">
       <button type="button"
@@ -1646,7 +1798,7 @@ function createDemoInterface() {
 
   if (workspace) {
     workspace.prepend(panel);
-  } else {
+  } else if ($("app")) {
     $("app").appendChild(panel);
   }
 
@@ -1665,6 +1817,35 @@ function createDemoInterface() {
   $("tmDemoOdd").addEventListener("click", () => {
     placeTradeMasterDemoTrade("ODD");
   });
+
+  updateDemoMarketDisplay();
+}
+
+// =====================================================
+// DISPLAY LIVE MARKET IN DEMO PANEL
+// =====================================================
+
+function updateDemoMarketDisplay() {
+  const priceElement = $("tmDemoMarketPrice");
+  const digitElement = $("tmDemoMarketDigit");
+
+  if (!priceElement || !digitElement) return;
+
+  if (!marketRawPrices.length) {
+    priceElement.textContent = "Waiting for market...";
+    digitElement.textContent = "-";
+    return;
+  }
+
+  const latestRaw =
+    marketRawPrices[marketRawPrices.length - 1];
+
+  const latestDigit = getLastDigit(latestRaw);
+
+  priceElement.textContent = String(latestRaw);
+
+  digitElement.textContent =
+    latestDigit === null ? "-" : String(latestDigit);
 }
 
 // =====================================================
@@ -1672,6 +1853,8 @@ function createDemoInterface() {
 // =====================================================
 
 async function switchTradeMasterAccount(mode) {
+  if (mode !== "REAL" && mode !== "DEMO") return;
+
   tradeMasterAccountMode = mode;
 
   $("tmRealMode").classList.toggle(
@@ -1730,8 +1913,34 @@ async function loadTradeMasterDemoWallet() {
 
   demoWalletBalance = Number(data.balance);
 
-  $("tmDemoBalance").textContent =
-    money(demoWalletBalance);
+  if ($("tmDemoBalance")) {
+    $("tmDemoBalance").textContent =
+      money(demoWalletBalance);
+  }
+}
+
+// =====================================================
+// CHECK FOR UNSETTLED DEMO TRADES
+// =====================================================
+
+async function hasOpenDemoTrade() {
+  if (!supabaseClient || !currentSession) return false;
+
+  const { data, error } = await supabaseClient
+    .from("demo_trades")
+    .select("id,status")
+    .eq("user_id", currentSession.user.id)
+    .eq("status", "OPEN")
+    .limit(1);
+
+  if (error) {
+    console.error("Open Demo trade check failed:", error);
+    throw new Error(
+      "Unable to verify existing Demo trades. Please try again later."
+    );
+  }
+
+  return Array.isArray(data) && data.length > 0;
 }
 
 // =====================================================
@@ -1742,6 +1951,7 @@ async function loadTradeMasterDemoHistory() {
   if (!supabaseClient || !currentSession) return;
 
   const history = $("tmDemoHistory");
+  if (!history) return;
 
   history.textContent = "Loading history...";
 
@@ -1765,15 +1975,31 @@ async function loadTradeMasterDemoHistory() {
     return;
   }
 
+  const hasOpen = data.some(
+    trade => String(trade.status).toUpperCase() === "OPEN"
+  );
+
+  demoTradePending = hasOpen;
+
   history.innerHTML = data.map(trade => {
     const status = String(trade.status || "").toUpperCase();
 
     const resultClass =
       status === "WON" ? "won" :
-      status === "LOST" ? "lost" : "";
+      status === "LOST" ? "lost" : "open";
 
     const date = new Date(trade.created_at)
       .toLocaleString();
+
+    let resultText = status;
+
+    if (status === "WON") {
+      resultText += " ↓ +" + money(trade.profit);
+    } else if (status === "LOST") {
+      resultText += " ↓ -" + money(trade.stake);
+    } else if (status === "OPEN") {
+      resultText = "PENDING";
+    }
 
     return `
       <div class="tm-demo-history-row">
@@ -1786,11 +2012,13 @@ async function loadTradeMasterDemoHistory() {
         <div style="text-align:right">
           <strong>${money(trade.stake)}</strong>
           <br>
-          <span class="${resultClass}">${status}</span>
+          <span class="${resultClass}">${resultText}</span>
         </div>
       </div>
     `;
   }).join("");
+
+  updateDemoTradeButtons();
 }
 
 // =====================================================
@@ -1799,9 +2027,40 @@ async function loadTradeMasterDemoHistory() {
 
 function showTradeMasterDemoResult(type, message) {
   const box = $("tmDemoResult");
+  if (!box) return;
 
   box.className = "tm-demo-result " + type;
   box.textContent = message;
+}
+
+// =====================================================
+// UPDATE DEMO TRADE BUTTONS
+// =====================================================
+
+function updateDemoTradeButtons() {
+  const evenButton = $("tmDemoEven");
+  const oddButton = $("tmDemoOdd");
+
+  if (!evenButton || !oddButton) return;
+
+  const disabled =
+    demoTradeBusy ||
+    demoTradePending ||
+    tradeMasterAccountMode !== "DEMO";
+
+  evenButton.disabled = disabled;
+  oddButton.disabled = disabled;
+
+  if (demoTradePending && !demoTradeBusy) {
+    evenButton.textContent = "TRADE PENDING";
+    oddButton.textContent = "TRADE PENDING";
+  } else if (demoTradeBusy) {
+    evenButton.textContent = "PLEASE WAIT...";
+    oddButton.textContent = "PLEASE WAIT...";
+  } else {
+    evenButton.textContent = "EVEN";
+    oddButton.textContent = "ODD";
+  }
 }
 
 // =====================================================
@@ -1809,7 +2068,10 @@ function showTradeMasterDemoResult(type, message) {
 // =====================================================
 
 async function placeTradeMasterDemoTrade(contractType) {
-  if (demoTradeBusy) return;
+  if (demoTradeBusy || demoTradePending) {
+    toast("Please wait for the previous Demo trade to settle.");
+    return;
+  }
 
   if (!supabaseClient || !currentSession) {
     toast("Please log in first.");
@@ -1821,7 +2083,17 @@ async function placeTradeMasterDemoTrade(contractType) {
     return;
   }
 
-  const stake = Number($("stake").value);
+  if (!marketConnected || !marketLastPrice) {
+    toast("Wait for the live market to connect first.");
+    return;
+  }
+
+  if (!["EVEN", "ODD"].includes(contractType)) {
+    toast("Invalid Demo contract type.");
+    return;
+  }
+
+  const stake = Number($("stake")?.value);
 
   if (!Number.isFinite(stake) || stake < 0.35) {
     toast("Minimum Demo stake is $0.35.");
@@ -1833,23 +2105,34 @@ async function placeTradeMasterDemoTrade(contractType) {
     return;
   }
 
-  const evenButton = $("tmDemoEven");
-  const oddButton = $("tmDemoOdd");
+  try {
+    // Check Supabase before starting a new trade.
+    const existingOpenTrade = await hasOpenDemoTrade();
+
+    if (existingOpenTrade) {
+      demoTradePending = true;
+
+      showTradeMasterDemoResult(
+        "pending",
+        "An earlier Demo trade is still open. Do not submit another trade."
+      );
+
+      updateDemoTradeButtons();
+      return;
+    }
+
+  } catch (error) {
+    toast(error.message);
+    return;
+  }
 
   demoTradeBusy = true;
-
-  evenButton.disabled = true;
-  oddButton.disabled = true;
-
-  evenButton.textContent = "PLEASE WAIT...";
-  oddButton.textContent = "PLEASE WAIT...";
+  updateDemoTradeButtons();
 
   showTradeMasterDemoResult(
     "pending",
     "Waiting for market entry and settlement..."
   );
-
-  let requestReturnedPending = false;
 
   try {
     const { data, error } =
@@ -1858,49 +2141,66 @@ async function placeTradeMasterDemoTrade(contractType) {
         {
           body: {
             contract_type: contractType,
-            stake: stake
+            stake
           }
         }
       );
 
-    if (error) {
-      throw error;
-    }
+    if (error) throw error;
 
     if (!data) {
       throw new Error("Empty response from Demo trading server.");
-    }
-
-    if (data.status === "PENDING") {
-      requestReturnedPending = true;
-
-      showTradeMasterDemoResult(
-        "pending",
-        "Trade is pending settlement. Do not submit another trade. Trade ID: " +
-        data.trade_id
-      );
-
-      await loadTradeMasterDemoWallet();
-      await loadTradeMasterDemoHistory();
-      return;
     }
 
     if (data.error) {
       throw new Error(data.error);
     }
 
-    const won = String(data.status).toUpperCase() === "WON";
+    if (
+      String(data.status).toUpperCase() === "PENDING" ||
+      data.status === "OPEN"
+    ) {
+      demoTradePending = true;
+
+      showTradeMasterDemoResult(
+        "pending",
+        "Trade is pending settlement. Do not submit another trade. Trade ID: " +
+        (data.trade_id || "Not supplied")
+      );
+
+      await loadTradeMasterDemoWallet();
+      await loadTradeMasterDemoHistory();
+
+      return;
+    }
+
+    const status = String(data.status || "").toUpperCase();
+
+    if (status !== "WON" && status !== "LOST") {
+      throw new Error(
+        "The server returned an unrecognized trade result."
+      );
+    }
+
+    const won = status === "WON";
 
     const profit = Number(data.profit || 0);
     const payout = Number(data.payout || 0);
 
-    showTradeMasterDemoResult(
-      won ? "win" : "loss",
-      won
-        ? "↓ PROFIT +" + money(profit) +
-          " · Payout " + money(payout)
-        : "↓ LOSS -" + money(stake)
-    );
+    if (won) {
+      showTradeMasterDemoResult(
+        "win",
+        "↓ PROFIT +" + money(profit) +
+        " · Payout " + money(payout)
+      );
+    } else {
+      showTradeMasterDemoResult(
+        "loss",
+        "↓ LOSS -" + money(stake)
+      );
+    }
+
+    demoTradePending = false;
 
     await loadTradeMasterDemoWallet();
     await loadTradeMasterDemoHistory();
@@ -1910,24 +2210,40 @@ async function placeTradeMasterDemoTrade(contractType) {
   } catch (error) {
     console.error("Demo trade error:", error);
 
-    // A network error may happen after the server has created
-    // the trade. Do not automatically retry the request.
+    // A network failure can happen after the server creates
+    // a trade. Never automatically submit the same trade again.
     showTradeMasterDemoResult(
       "pending",
-      "Trade result could not be confirmed. Check Demo history before trying again."
+      "Result not confirmed. Checking your Demo trade history. Do not retry yet."
     );
 
-    await loadTradeMasterDemoWallet();
-    await loadTradeMasterDemoHistory();
+    try {
+      await loadTradeMasterDemoWallet();
+      await loadTradeMasterDemoHistory();
+
+      const openTrade = await hasOpenDemoTrade();
+
+      if (openTrade) {
+        demoTradePending = true;
+
+        showTradeMasterDemoResult(
+          "pending",
+          "An unsettled Demo trade exists. Wait for settlement before placing another trade."
+        );
+      } else {
+        showTradeMasterDemoResult(
+          "pending",
+          "The result could not be confirmed. Check your history before trying again."
+        );
+      }
+
+    } catch (checkError) {
+      console.error("Trade verification error:", checkError);
+    }
 
   } finally {
     demoTradeBusy = false;
-
-    evenButton.disabled = false;
-    oddButton.disabled = false;
-
-    evenButton.textContent = "EVEN";
-    oddButton.textContent = "ODD";
+    updateDemoTradeButtons();
   }
 }
 
@@ -1940,10 +2256,10 @@ function initializeTradeMasterDemo() {
 
   createDemoInterface();
 
-  if (tradeMasterAccountMode === "DEMO") {
-    loadTradeMasterDemoWallet();
-    loadTradeMasterDemoHistory();
-  }
+  loadTradeMasterDemoWallet();
+  loadTradeMasterDemoHistory();
+
+  updateDemoMarketDisplay();
 }
 
 // =====================================================
@@ -1958,6 +2274,7 @@ function initializeTradeMasterDemo() {
     authMessage(
       "Supabase connection unavailable. Check that the Supabase JavaScript library is loaded in index.html and that your project details are correct."
     );
+
     return;
   }
 
@@ -2001,6 +2318,7 @@ if (supabaseClient) {
 
       if (event === "SIGNED_OUT") {
         currentProfile = {};
+        demoTradePending = false;
 
         stopDerivMarket();
         showAuth();
