@@ -1,7 +1,7 @@
 /* =====================================================
    TRADE MASTER
    SUPABASE + MPESA + DERIV + LIVE MARKET
-   RESTORED MAIN APPLICATION
+   LIVE DIGIT STRIP FIX
 ===================================================== */
 
 // ==========================================
@@ -45,6 +45,7 @@ let marketReconnectDelay = 3000;
 let marketConnected = false;
 let marketPrices = [];
 let marketTimes = [];
+let marketRawPrices = [];
 let marketLastPrice = null;
 
 // ==========================================
@@ -68,7 +69,6 @@ if (
 
 function toast(message) {
   const el = $("toast");
-
   if (!el) return;
 
   el.textContent = message;
@@ -87,7 +87,6 @@ function toast(message) {
 
 function authMessage(message, isError = true) {
   const el = $("authMessage");
-
   if (!el) return;
 
   el.textContent = message;
@@ -150,10 +149,7 @@ function setSignupMode() {
   authMessage("");
 }
 
-$("switchAuth").addEventListener(
-  "click",
-  setSignupMode
-);
+$("switchAuth").addEventListener("click", setSignupMode);
 
 // ==========================================
 // AUTHENTICATION
@@ -232,10 +228,7 @@ $("authForm").addEventListener("submit", async (event) => {
 
   } catch (error) {
     console.error("Authentication error:", error);
-
-    authMessage(
-      error.message || "Unable to authenticate."
-    );
+    authMessage(error.message || "Unable to authenticate.");
 
   } finally {
     $("authSubmit").disabled = false;
@@ -318,9 +311,7 @@ async function loadDerivAccounts() {
     const { data, error } =
       await supabaseClient.functions.invoke(
         "deriv-account-balance",
-        {
-          body: {}
-        }
+        { body: {} }
       );
 
     if (error) throw error;
@@ -332,7 +323,6 @@ async function loadDerivAccounts() {
     }
 
     const response = data.accounts;
-
     let accounts = [];
 
     if (Array.isArray(response)) {
@@ -462,10 +452,7 @@ function connectDerivMarket() {
       }
 
       if (message.error) {
-        console.error(
-          "Deriv market error:",
-          message.error
-        );
+        console.error("Deriv market error:", message.error);
 
         setMarketStatus(
           message.error.message || "Market feed error"
@@ -474,9 +461,12 @@ function connectDerivMarket() {
         return;
       }
 
+      // LOAD MARKET HISTORY
       if (message.history) {
         const prices = message.history.prices || [];
         const times = message.history.times || [];
+
+        marketRawPrices = prices.map(String);
 
         marketPrices = prices
           .map(Number)
@@ -485,6 +475,7 @@ function connectDerivMarket() {
         marketTimes = times.map(Number);
 
         updateLiveChart();
+        updateDigitStrip();
 
         if (
           marketSocket &&
@@ -507,6 +498,7 @@ function connectDerivMarket() {
         return;
       }
 
+      // RECEIVE LIVE TICKS
       if (message.tick) {
         const price = Number(message.tick.quote);
         const epoch = Number(message.tick.epoch);
@@ -516,6 +508,7 @@ function connectDerivMarket() {
         marketLastPrice = price;
 
         marketPrices.push(price);
+        marketRawPrices.push(String(message.tick.quote));
 
         marketTimes.push(
           Number.isFinite(epoch)
@@ -528,20 +521,19 @@ function connectDerivMarket() {
           marketTimes.shift();
         }
 
+        if (marketRawPrices.length > 70) {
+          marketRawPrices.shift();
+        }
+
         updateLiveChart();
+        updateDigitStrip();
 
         setMarketStatus("Live market running");
-
-        return;
       }
     };
 
     marketSocket.onerror = (error) => {
-      console.error(
-        "Deriv market WebSocket error:",
-        error
-      );
-
+      console.error("Deriv market WebSocket error:", error);
       setMarketStatus("Market connection error");
     };
 
@@ -558,10 +550,7 @@ function connectDerivMarket() {
     };
 
   } catch (error) {
-    console.error(
-      "Market connection failed:",
-      error
-    );
+    console.error("Market connection failed:", error);
 
     setMarketStatus("Unable to connect to market");
 
@@ -615,9 +604,7 @@ function updateLiveChart() {
       (_, index) => index
     );
 
-    chart.data.datasets[0].data = [
-      ...marketPrices
-    ];
+    chart.data.datasets[0].data = [...marketPrices];
 
     chart.update("none");
   }
@@ -648,6 +635,56 @@ function updateLiveChart() {
   }
 
   marketLastPrice = latestPrice;
+  updateDigitStrip();
+}
+
+// ==========================================
+// LIVE DIGIT STRIP
+// ==========================================
+
+function getLastDigit(price) {
+  const digits = String(price).replace(/\D/g, "");
+
+  return digits.length
+    ? Number(digits[digits.length - 1])
+    : null;
+}
+
+function renderDigits() {
+  updateDigitStrip();
+}
+
+function updateDigitStrip() {
+  const strip = $("digitStrip");
+
+  if (!strip) return;
+
+  const counts = Array(10).fill(0);
+
+  const recentPrices = marketRawPrices.slice(-70);
+
+  recentPrices.forEach(price => {
+    const digit = getLastDigit(price);
+
+    if (digit !== null) {
+      counts[digit]++;
+    }
+  });
+
+  const latestPrice =
+    marketRawPrices[marketRawPrices.length - 1];
+
+  const latestDigit =
+    latestPrice !== undefined
+      ? getLastDigit(latestPrice)
+      : null;
+
+  strip.innerHTML = counts.map((count, digit) => `
+    <div class="digit ${digit === latestDigit ? "hot" : ""}">
+      ${digit}
+      <small>${count}</small>
+    </div>
+  `).join("");
 }
 
 // ==========================================
@@ -692,10 +729,7 @@ async function signOut() {
 
 $("logoutBtn").addEventListener("click", signOut);
 
-$("profileLogoutBtn").addEventListener(
-  "click",
-  signOut
-);
+$("profileLogoutBtn").addEventListener("click", signOut);
 
 // ==========================================
 // MODAL NAVIGATION
@@ -788,10 +822,7 @@ document.querySelectorAll("[data-open-panel]")
   .forEach(btn => {
     btn.addEventListener("click", event => {
       event.preventDefault();
-
-      openAccountPanel(
-        btn.dataset.openPanel
-      );
+      openAccountPanel(btn.dataset.openPanel);
     });
   });
 
@@ -829,15 +860,11 @@ $("depositAmount").addEventListener(
 document.querySelectorAll("[data-amount]")
   .forEach(btn => {
     btn.addEventListener("click", () => {
-      $("depositAmount").value =
-        btn.dataset.amount;
+      $("depositAmount").value = btn.dataset.amount;
 
       document.querySelectorAll("[data-amount]")
         .forEach(b => {
-          b.classList.toggle(
-            "active",
-            b === btn
-          );
+          b.classList.toggle("active", b === btn);
         });
 
       updateDepositEstimate();
@@ -861,17 +888,12 @@ async function loadExchangeRate() {
 
     const data = await response.json();
 
-    if (
-      data.rates &&
-      Number(data.rates.KES) > 0
-    ) {
+    if (data.rates && Number(data.rates.KES) > 0) {
       usdKesRate = Number(data.rates.KES);
     }
 
   } catch (error) {
-    console.log(
-      "Using fallback USD/KES estimate."
-    );
+    console.log("Using fallback USD/KES estimate.");
   }
 
   updateDepositEstimate();
@@ -910,10 +932,7 @@ async function getDepositErrorMessage(error) {
     error?.message ||
     "Unable to start the M-Pesa request.";
 
-  console.error(
-    "M-Pesa function error:",
-    error
-  );
+  console.error("M-Pesa function error:", error);
 
   if (error?.context) {
     try {
@@ -958,107 +977,87 @@ async function getDepositErrorMessage(error) {
 // REQUEST MPESA PAYMENT
 // ==========================================
 
-$("depositBtn").addEventListener(
-  "click",
-  async () => {
-    const amountUsd =
-      Number($("depositAmount").value);
+$("depositBtn").addEventListener("click", async () => {
+  const amountUsd = Number($("depositAmount").value);
 
-    const phone = normalizeKenyanPhone(
-      $("mpesaPhone").value
-    );
+  const phone = normalizeKenyanPhone(
+    $("mpesaPhone").value
+  );
 
-    if (
-      !Number.isFinite(amountUsd) ||
-      amountUsd < 1
-    ) {
-      $("depositMsg").textContent =
-        "Enter a valid deposit amount of at least $1.";
-
-      return;
-    }
-
-    if (!phone) {
-      $("depositMsg").textContent =
-        "Enter a valid Kenyan M-Pesa number, for example 254712345678.";
-
-      return;
-    }
-
-    if (!supabaseClient || !currentSession) {
-      $("depositMsg").textContent =
-        "Please log in with your Supabase account before requesting a deposit.";
-
-      return;
-    }
-
-    const amountKes =
-      Math.round(amountUsd * usdKesRate);
-
-    try {
-      $("depositBtn").disabled = true;
-
-      $("depositBtn").textContent =
-        "Requesting M-Pesa...";
-
-      const { data, error } =
-        await supabaseClient.functions.invoke(
-          "mpesa-stk-push",
-          {
-            body: {
-              phone: phone,
-              amount: amountKes,
-              amount_usd: amountUsd,
-              currency: "KES"
-            }
-          }
-        );
-
-      if (error) {
-        const actualMessage =
-          await getDepositErrorMessage(error);
-
-        throw new Error(actualMessage);
-      }
-
-      if (!data) {
-        throw new Error(
-          "The payment function returned an empty response."
-        );
-      }
-
-      if (data.error) {
-        throw new Error(data.error);
-      }
-
-      $("depositMsg").textContent =
-        data.message ||
-        "M-Pesa request submitted. Check your phone and approve only if the amount and business details are correct.";
-
-      toast(
-        "M-Pesa request sent. Await payment confirmation."
-      );
-
-    } catch (error) {
-      console.error(
-        "Deposit request failed:",
-        error
-      );
-
-      $("depositMsg").textContent =
-        error.message ||
-        "Unable to start the M-Pesa request. Please try again.";
-
-      toast(
-        error.message || "M-Pesa request failed."
-      );
-
-    } finally {
-      $("depositBtn").disabled = false;
-      updateDepositEstimate();
-    }
+  if (!Number.isFinite(amountUsd) || amountUsd < 1) {
+    $("depositMsg").textContent =
+      "Enter a valid deposit amount of at least $1.";
+    return;
   }
-);
+
+  if (!phone) {
+    $("depositMsg").textContent =
+      "Enter a valid Kenyan M-Pesa number, for example 254712345678.";
+    return;
+  }
+
+  if (!supabaseClient || !currentSession) {
+    $("depositMsg").textContent =
+      "Please log in with your Supabase account before requesting a deposit.";
+    return;
+  }
+
+  const amountKes = Math.round(amountUsd * usdKesRate);
+
+  try {
+    $("depositBtn").disabled = true;
+    $("depositBtn").textContent = "Requesting M-Pesa...";
+
+    const { data, error } =
+      await supabaseClient.functions.invoke(
+        "mpesa-stk-push",
+        {
+          body: {
+            phone: phone,
+            amount: amountKes,
+            amount_usd: amountUsd,
+            currency: "KES"
+          }
+        }
+      );
+
+    if (error) {
+      const actualMessage =
+        await getDepositErrorMessage(error);
+
+      throw new Error(actualMessage);
+    }
+
+    if (!data) {
+      throw new Error(
+        "The payment function returned an empty response."
+      );
+    }
+
+    if (data.error) {
+      throw new Error(data.error);
+    }
+
+    $("depositMsg").textContent =
+      data.message ||
+      "M-Pesa request submitted. Check your phone and approve only if the amount and business details are correct.";
+
+    toast("M-Pesa request sent. Await payment confirmation.");
+
+  } catch (error) {
+    console.error("Deposit request failed:", error);
+
+    $("depositMsg").textContent =
+      error.message ||
+      "Unable to start the M-Pesa request. Please try again.";
+
+    toast(error.message || "M-Pesa request failed.");
+
+  } finally {
+    $("depositBtn").disabled = false;
+    updateDepositEstimate();
+  }
+});
 
 // ==========================================
 // MARKET CHART
@@ -1103,7 +1102,6 @@ function renderChart() {
         legend: {
           display: false
         },
-
         tooltip: {
           enabled: true
         }
@@ -1119,7 +1117,6 @@ function renderChart() {
 
         y: {
           position: "right",
-
           ticks: {
             color: "#8b98ac",
             maxTicksLimit: 6,
@@ -1127,7 +1124,6 @@ function renderChart() {
               size: 9
             }
           },
-
           grid: {
             color: "rgba(100,120,150,.10)"
           }
@@ -1144,21 +1140,6 @@ function renderChart() {
 }
 
 // ==========================================
-// DIGIT STRIP
-// ==========================================
-
-function renderDigits() {
-  $("digitStrip").innerHTML = Array.from(
-    { length: 10 },
-    (_, i) =>
-      `<div class="digit ${i === 7 ? "hot" : ""}">
-        ${i}
-        <small>--</small>
-      </div>`
-  ).join("");
-}
-
-// ==========================================
 // CLOCK
 // ==========================================
 
@@ -1168,17 +1149,13 @@ function updateClock() {
 }
 
 setInterval(updateClock, 1000);
-
 updateClock();
 
 // ==========================================
 // STAKE AND PAYOUT
 // ==========================================
 
-$("stake").addEventListener(
-  "input",
-  updatePayout
-);
+$("stake").addEventListener("input", updatePayout);
 
 function updatePayout() {
   const stake = Math.max(
@@ -1244,12 +1221,10 @@ document.querySelectorAll(".tabs .tab")
           "No open positions",
           "Your active trades will appear here"
         ],
-
         closed: [
           "No closed positions",
           "Your completed trades will appear here"
         ],
-
         transactions: [
           "No transactions yet",
           "Your account activity will appear here"
@@ -1291,7 +1266,6 @@ $("scannerBtn").addEventListener("click", () => {
 
 function addChatMessage(text, who) {
   const box = $("aiMessages");
-
   const div = document.createElement("div");
 
   div.className =
@@ -1304,11 +1278,9 @@ function addChatMessage(text, who) {
     who === "user" ? "You" : "TM AI";
 
   const p = document.createElement("p");
-
   p.textContent = text;
 
   div.append(strong, p);
-
   box.append(div);
 
   box.scrollTop = box.scrollHeight;
@@ -1346,11 +1318,7 @@ document.querySelectorAll("[data-ai-question]")
       const q = btn.dataset.aiQuestion;
 
       addChatMessage(q, "user");
-
-      addChatMessage(
-        answerQuestion(q),
-        "bot"
-      );
+      addChatMessage(answerQuestion(q), "bot");
     });
   });
 
@@ -1358,25 +1326,18 @@ document.querySelectorAll("[data-ai-question]")
 // CHAT FORM
 // ==========================================
 
-$("aiChatForm").addEventListener(
-  "submit",
-  event => {
-    event.preventDefault();
+$("aiChatForm").addEventListener("submit", event => {
+  event.preventDefault();
 
-    const q = $("aiInput").value.trim();
+  const q = $("aiInput").value.trim();
 
-    if (!q) return;
+  if (!q) return;
 
-    addChatMessage(q, "user");
+  addChatMessage(q, "user");
+  addChatMessage(answerQuestion(q), "bot");
 
-    addChatMessage(
-      answerQuestion(q),
-      "bot"
-    );
-
-    $("aiInput").value = "";
-  }
-);
+  $("aiInput").value = "";
+});
 
 // ==========================================
 // CLEAR CHAT
@@ -1420,62 +1381,56 @@ $("cancelProfileBtn").addEventListener("click", () => {
 
   setProfileEditing(false);
 
-  $("profileMessage").textContent =
-    "Changes cancelled.";
+  $("profileMessage").textContent = "Changes cancelled.";
 });
 
-$("saveProfileBtn").addEventListener(
-  "click",
-  async () => {
-    if (!supabaseClient) return;
+$("saveProfileBtn").addEventListener("click", async () => {
+  if (!supabaseClient) return;
 
-    const name = $("profileName").value.trim();
-    const phone = $("profilePhone").value.trim();
-    const age = Number($("profileAge").value);
+  const name = $("profileName").value.trim();
+  const phone = $("profilePhone").value.trim();
+  const age = Number($("profileAge").value);
 
-    if (!name || !phone || !age || age < 18 || age > 100) {
-      $("profileMessage").textContent =
-        "Enter a valid name, phone number and age (18+).";
-
-      return;
-    }
-
-    try {
-      $("saveProfileBtn").disabled = true;
-
-      const { data, error } =
-        await supabaseClient.auth.updateUser({
-          data: {
-            full_name: name,
-            phone: phone,
-            age: age
-          }
-        });
-
-      if (error) throw error;
-
-      currentProfile.name = name;
-      currentProfile.phone = phone;
-      currentProfile.age = age;
-
-      $("profileMessage").textContent =
-        "Profile updated successfully.";
-
-      setProfileEditing(false);
-
-      toast("Profile updated.");
-
-    } catch (error) {
-      console.error("Profile update error:", error);
-
-      $("profileMessage").textContent =
-        error.message || "Unable to update profile.";
-
-    } finally {
-      $("saveProfileBtn").disabled = false;
-    }
+  if (!name || !phone || !age || age < 18 || age > 100) {
+    $("profileMessage").textContent =
+      "Enter a valid name, phone number and age (18+).";
+    return;
   }
-);
+
+  try {
+    $("saveProfileBtn").disabled = true;
+
+    const { error } =
+      await supabaseClient.auth.updateUser({
+        data: {
+          full_name: name,
+          phone: phone,
+          age: age
+        }
+      });
+
+    if (error) throw error;
+
+    currentProfile.name = name;
+    currentProfile.phone = phone;
+    currentProfile.age = age;
+
+    $("profileMessage").textContent =
+      "Profile updated successfully.";
+
+    setProfileEditing(false);
+    toast("Profile updated.");
+
+  } catch (error) {
+    console.error("Profile update error:", error);
+
+    $("profileMessage").textContent =
+      error.message || "Unable to update profile.";
+
+  } finally {
+    $("saveProfileBtn").disabled = false;
+  }
+});
 
 // ==========================================
 // RESTORE SUPABASE SESSION
@@ -1489,7 +1444,6 @@ $("saveProfileBtn").addEventListener(
     authMessage(
       "Supabase connection unavailable. Check that the Supabase JavaScript library is loaded in index.html and that your project details are correct."
     );
-
     return;
   }
 
@@ -1505,7 +1459,6 @@ $("saveProfileBtn").addEventListener(
       currentSession = data.session;
 
       await loadProfile();
-
       enterDashboard();
 
     } else {
@@ -1536,7 +1489,6 @@ if (supabaseClient) {
         currentProfile = {};
 
         stopDerivMarket();
-
         showAuth();
       }
     }
