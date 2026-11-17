@@ -1,6 +1,6 @@
 /* =========================================
-   TRADEMASTER - SECURE DERIV OAUTH START
-   OAuth 2.0 Authorization Code + PKCE
+   TRADEMASTER - DERIV OAUTH
+   Authorization Code + PKCE
 ========================================= */
 
 (() => {
@@ -19,6 +19,27 @@
   function showStatus(status, message) {
     if (statusElement) statusElement.textContent = status;
     if (messageElement) messageElement.textContent = message;
+  }
+
+  // Display the result returned by the secure callback page.
+  const pageParams = new URLSearchParams(window.location.search);
+
+  if (pageParams.get("deriv_connected") === "1") {
+    showStatus(
+      "Authorization successful",
+      "Deriv authorization was completed and the backend confirmed the connection."
+    );
+
+    window.history.replaceState(
+      {},
+      document.title,
+      window.location.pathname
+    );
+  } else {
+    showStatus(
+      "Not connected",
+      "Select Connect Deriv to securely authorize your account."
+    );
   }
 
   function randomString(length = 64) {
@@ -57,9 +78,7 @@
   async function connectDeriv() {
     try {
       if (!window.crypto || !crypto.subtle) {
-        throw new Error(
-          "Secure browser connection required. Open TradeMaster using HTTPS."
-        );
+        throw new Error("Please open TradeMaster using a secure HTTPS connection.");
       }
 
       connectButton.disabled = true;
@@ -74,7 +93,6 @@
       const challenge = await createCodeChallenge(verifier);
       const state = randomString(48);
 
-      // Keep temporary OAuth security values in this browser session.
       sessionStorage.setItem("tm_deriv_code_verifier", verifier);
       sessionStorage.setItem("tm_deriv_oauth_state", state);
 
@@ -88,15 +106,17 @@
         code_challenge_method: "S256"
       });
 
-      const authorizationUrl =
-        `${DERIV_AUTH_URL}?${params.toString()}`;
-
-      window.location.assign(authorizationUrl);
+      window.location.assign(
+        `${DERIV_AUTH_URL}?${params.toString()}`
+      );
 
     } catch (error) {
       console.error("Deriv authorization error:", error);
 
-      showStatus("Not connected", error.message || "Could not start Deriv authorization.");
+      showStatus(
+        "Not connected",
+        error.message || "Could not start Deriv authorization."
+      );
 
       connectButton.disabled = false;
       connectButton.textContent = "Connect Deriv";
@@ -107,9 +127,5 @@
     connectButton.addEventListener("click", connectDeriv);
   }
 
-  showStatus(
-    "Not connected",
-    "Select Connect Deriv to securely authorize your account."
-  );
-
 })();
+    
