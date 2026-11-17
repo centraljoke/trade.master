@@ -1,6 +1,6 @@
 /* ==========================================
    TRADE MASTER
-   SUPABASE + DEPOSIT + DASHBOARD + DERIV
+   SUPABASE + MPESA + DERIV + LIVE MARKET
 ========================================== */
 
 // ==========================================
@@ -28,6 +28,26 @@ let currentProfile = {};
 let chart = null;
 let chartPoints = [];
 let usdKesRate = 130.03;
+
+// ==========================================
+// DERIV LIVE MARKET CONFIGURATION
+// ==========================================
+
+const DERIV_MARKET_SYMBOL = "1HZ10V";
+
+const DERIV_MARKET_NAME = "Volatility 10 (1s) Index";
+
+const DERIV_PUBLIC_WS =
+  "wss://api.derivws.com/trading/v1/options/ws/public";
+
+let marketSocket = null;
+let marketReconnectTimer = null;
+let marketReconnectDelay = 3000;
+let marketHistoryLoaded = false;
+let marketConnected = false;
+let marketPrices = [];
+let marketTimes = [];
+let marketLastPrice = null;
 
 // ==========================================
 // CONNECT SUPABASE
@@ -257,19 +277,20 @@ function enterDashboard() {
   $("profilePhone").value = currentProfile.phone || "";
   $("profileAge").value = currentProfile.age || "";
 
-  $("profileBalance").value = "Loading Deriv balance...";
-  $("balanceValue").textContent = "Loading Deriv balance...";
+  $("profileBalance").value = "Loading REAL balance...";
+  $("balanceValue").textContent = "Loading REAL balance...";
 
   renderChart();
   renderDigits();
   loadExchangeRate();
 
-  // LOAD DERIV ACCOUNT BALANCES
   loadDerivAccounts();
+
+  connectDerivMarket();
 }
 
 // ==========================================
-// LOAD REAL DERIV ACCOUNT BALANCES
+// LOAD REAL DERIV ACCOUNT BALANCE ONLY
 // ==========================================
 
 async function loadDerivAccounts() {
@@ -281,11 +302,11 @@ async function loadDerivAccounts() {
   const profileBalanceElement = $("profileBalance");
 
   if (balanceElement) {
-    balanceElement.textContent = "Loading Deriv balance...";
+    balanceElement.textContent = "Loading REAL balance...";
   }
 
   if (profileBalanceElement) {
-    profileBalanceElement.value = "Loading Deriv balance...";
+    profileBalanceElement.value = "Loading REAL balance...";
   }
 
   try {
@@ -297,9 +318,7 @@ async function loadDerivAccounts() {
         }
       );
 
-    if (error) {
-      throw error;
-    }
+    if (error) throw error;
 
     if (!data || !data.success) {
       throw new Error(
@@ -308,8 +327,6 @@ async function loadDerivAccounts() {
     }
 
     const response = data.accounts;
-
-    // SUPPORT DIFFERENT DERIV RESPONSE STRUCTURES
 
     let accounts = [];
 
@@ -326,32 +343,39 @@ async function loadDerivAccounts() {
       accounts = response.accounts;
     }
 
-    if (accounts.length === 0) {
+    // IDENTIFY REAL ACCOUNTS
+
+    const realAccounts = accounts.filter(account => {
+      const type = String(
+        account.account_type || account.type || ""
+      ).toLowerCase();
+
+      return (
+        type === "real" ||
+        type.includes("real_money") ||
+        account.is_virtual === false
+      );
+    });
+
+    if (realAccounts.length === 0) {
       throw new Error(
-        "No Deriv trading accounts were returned. Check your Deriv connection."
+        "No REAL Deriv account was found."
       );
     }
 
-    // FORMAT EACH ACCOUNT BALANCE
-
-    const accountLines = accounts.map(account => {
+    const accountLines = realAccounts.map(account => {
       const amount = Number(account.balance);
 
       const currency = account.currency || "USD";
 
-      const type =
-        account.account_type ||
-        account.type ||
-        "Account";
-
       if (!Number.isFinite(amount)) {
         throw new Error(
-          "Deriv returned an invalid account balance."
+          "Deriv returned an invalid REAL account balance."
         );
       }
 
       return (
-        `${String(type).toUpperCase()}: ${currency} ` +
+        `${currency} ` +
         amount.toLocaleString("en-US", {
           minimumFractionDigits: 2,
           maximumFractionDigits: 2
@@ -370,18 +394,18 @@ async function loadDerivAccounts() {
     }
 
     console.log(
-      "Deriv accounts loaded:",
-      accounts.length
+      "REAL Deriv accounts loaded:",
+      realAccounts.length
     );
 
-    toast("Deriv account balances loaded successfully.");
+    toast("REAL Deriv balance loaded.");
 
   } catch (error) {
     console.error("Deriv balance error:", error);
 
     if (balanceElement) {
       balanceElement.textContent =
-        "Deriv balance unavailable";
+        "REAL balance unavailable";
     }
 
     if (profileBalanceElement) {
@@ -389,9 +413,250 @@ async function loadDerivAccounts() {
     }
 
     toast(
-      error.message || "Unable to load Deriv balance."
+      error.message || "Unable to load REAL balance."
     );
   }
+}
+
+// ==========================================
+// DERIV LIVE MARKET CONNECTION
+// ==========================================
+
+function connectDerivMarket() {
+  if (
+    marketSocket &&
+    (
+      marketSocket.readyState === WebSocket.OPEN ||
+      marketSocket.readyState === WebSocket.CONNECTING
+    )
+  ) {
+    return;
+  }
+
+  clearTimeout(marketReconnectTimer);
+
+  setMarketStatus("Connecting to live market...");
+
+  try {
+    marketSocket = new WebSocket(DERIV_PUBLIC_WS);
+
+    marketSocket.onopen = () => {
+      marketConnected = true;
+      marketReconnectDelay = 3000;
+
+      setMarketStatus("Live market connected");
+
+      console.log("Deriv market connected.");
+
+      // REQUEST HISTORICAL MARKET PRICES
+
+      marketSocket.send(JSON.stringify({
+        ticks_history: DERIV_MARKET_SYMBOL,
+        count: 70,
+        end: "latest",
+        style: "ticks",
+        req_id: 1
+      }));
+    };
+
+    marketSocket.onmessage = (event) => {
+      let message;
+
+      try {
+        message = JSON.parse(event.data);
+      } catch (error) {
+        console.error("Invalid market response:", error);
+        return;
+      }
+
+      if (message.error) {
+        console.error(
+          "Deriv market error:",
+          message.error
+        );
+
+        setMarketStatus(
+          message.error.message || "Market feed error"
+        );
+
+        return;
+      }
+
+      // HISTORICAL DATA
+
+      if (message.history) {
+        const prices = message.history.prices || [];
+        const times = message.history.times || [];
+
+        marketPrices = prices.map(Number).filter(Number.isFinite);
+
+        marketTimes = times.map(Number);
+
+        marketHistoryLoaded = true;
+
+        updateLiveChart();
+
+        // SUBSCRIBE TO LIVE TICKS
+
+        if (
+          marketSocket &&
+          marketSocket.readyState === WebSocket.OPEN
+        ) {
+          marketSocket.send(JSON.stringify({
+            ticks: DERIV_MARKET_SYMBOL,
+            subscribe: 1,
+            req_id: 2
+          }));
+        }
+
+        setMarketStatus("Live market running");
+
+        console.log(
+          "Market history loaded:",
+          marketPrices.length
+        );
+
+        return;
+      }
+
+      // LIVE TICK DATA
+
+      if (message.tick) {
+        const price = Number(message.tick.quote);
+
+        const epoch = Number(message.tick.epoch);
+
+        if (!Number.isFinite(price)) return;
+
+        marketLastPrice = price;
+
+        marketPrices.push(price);
+        marketTimes.push(
+          Number.isFinite(epoch)
+            ? epoch
+            : Math.floor(Date.now() / 1000)
+        );
+
+        // KEEP THE LATEST 70 PRICES
+
+        if (marketPrices.length > 70) {
+          marketPrices.shift();
+          marketTimes.shift();
+        }
+
+        updateLiveChart();
+
+        setMarketStatus("Live market running");
+
+        return;
+      }
+
+      if (message.msg_type === "ping") {
+        return;
+      }
+    };
+
+    marketSocket.onerror = (error) => {
+      console.error("Deriv market WebSocket error:", error);
+
+      setMarketStatus("Market connection error");
+    };
+
+    marketSocket.onclose = () => {
+      marketConnected = false;
+      marketHistoryLoaded = false;
+
+      setMarketStatus("Market disconnected. Reconnecting...");
+
+      console.log("Deriv market disconnected.");
+
+      scheduleMarketReconnect();
+    };
+
+  } catch (error) {
+    console.error("Market connection failed:", error);
+
+    setMarketStatus("Unable to connect to market");
+
+    scheduleMarketReconnect();
+  }
+}
+
+// ==========================================
+// MARKET RECONNECTION
+// ==========================================
+
+function scheduleMarketReconnect() {
+  clearTimeout(marketReconnectTimer);
+
+  marketReconnectTimer = setTimeout(() => {
+    connectDerivMarket();
+  }, marketReconnectDelay);
+
+  marketReconnectDelay = Math.min(
+    marketReconnectDelay * 2,
+    30000
+  );
+}
+
+// ==========================================
+// MARKET STATUS DISPLAY
+// ==========================================
+
+function setMarketStatus(status) {
+  const statusElement = $("marketStatus");
+
+  if (statusElement) {
+    statusElement.textContent = status;
+  }
+
+  console.log("Market status:", status);
+}
+
+// ==========================================
+// UPDATE LIVE CHART
+// ==========================================
+
+function updateLiveChart() {
+  if (!marketPrices.length) return;
+
+  const latestPrice = marketPrices[
+    marketPrices.length - 1
+  ];
+
+  if (chart) {
+    chart.data.labels = marketPrices.map(
+      (_, index) => index
+    );
+
+    chart.data.datasets[0].data = [...marketPrices];
+
+    chart.update("none");
+  }
+
+  const priceElement = $("marketPrice");
+
+  if (priceElement) {
+    priceElement.textContent = latestPrice.toFixed(2);
+  }
+
+  marketLastPrice = latestPrice;
+}
+
+// ==========================================
+// STOP MARKET CONNECTION
+// ==========================================
+
+function stopDerivMarket() {
+  clearTimeout(marketReconnectTimer);
+
+  if (marketSocket) {
+    marketSocket.onclose = null;
+    marketSocket.close();
+    marketSocket = null;
+  }
+
+  marketConnected = false;
 }
 
 // ==========================================
@@ -399,6 +664,8 @@ async function loadDerivAccounts() {
 // ==========================================
 
 async function signOut() {
+  stopDerivMarket();
+
   if (supabaseClient) {
     const { error } = await supabaseClient.auth.signOut();
 
@@ -747,7 +1014,7 @@ $("depositBtn").addEventListener("click", async () => {
 
 // ==========================================
 // MARKET CHART
-// PREVIEW DATA UNTIL DERIV IS CONNECTED
+// LIVE DERIV DATA - NO RANDOM PREVIEW DATA
 // ==========================================
 
 function renderChart() {
@@ -759,28 +1026,23 @@ function renderChart() {
     chart.destroy();
   }
 
-  chartPoints = Array.from(
-    { length: 70 },
-    (_, i) =>
-      9452 +
-      Math.sin(i / 4) * 5 +
-      (Math.random() - 0.5) * 2 -
-      i * 0.08
-  );
+  chartPoints = [];
 
   chart = new Chart(canvas, {
     type: "line",
 
     data: {
-      labels: chartPoints.map((_, i) => i),
+      labels: [],
 
       datasets: [{
-        data: chartPoints,
-        borderColor: "#d0d5df",
-        borderWidth: 1.5,
+        label: DERIV_MARKET_NAME,
+        data: [],
+        borderColor: "#00c49a",
+        backgroundColor: "rgba(0,196,154,.08)",
+        borderWidth: 1.8,
         pointRadius: 0,
-        tension: 0.25,
-        fill: false
+        tension: 0.15,
+        fill: true
       }]
     },
 
@@ -791,7 +1053,10 @@ function renderChart() {
 
       plugins: {
         legend: { display: false },
-        tooltip: { enabled: false }
+
+        tooltip: {
+          enabled: true
+        }
       },
 
       scales: {
@@ -817,8 +1082,11 @@ function renderChart() {
     }
   });
 
-  $("marketPrice").textContent =
-    chartPoints.at(-1).toFixed(2);
+  const priceElement = $("marketPrice");
+
+  if (priceElement) {
+    priceElement.textContent = "Connecting...";
+  }
 }
 
 // ==========================================
@@ -830,7 +1098,7 @@ function renderDigits() {
     Array.from({ length: 10 }, (_, i) => `
       <div class="digit ${i === 7 ? "hot" : ""}">
         ${i}
-        <small>${(8 + Math.random() * 5).toFixed(1)}%</small>
+        <small>--</small>
       </div>
     `).join("");
 }
@@ -952,7 +1220,7 @@ $("themeBtn").addEventListener("click", () => {
 
 $("scannerBtn").addEventListener("click", () => {
   toast(
-    "Scanner is in preview mode until a verified live market feed is connected."
+    "Scanner is in preview mode until its analysis engine is connected."
   );
 });
 
@@ -990,7 +1258,7 @@ function answerQuestion(q) {
   const s = q.toLowerCase();
 
   if (s.includes("even") || s.includes("odd")) {
-    return "Even/Odd contracts predict whether the last digit of a market tick is even or odd. This screen is currently a preview; it does not place trades.";
+    return "Even/Odd contracts predict whether the last digit of a market tick is even or odd. The live chart displays market prices, but this screen does not currently place trades.";
   }
 
   if (s.includes("volatil")) {
@@ -1002,7 +1270,7 @@ function answerQuestion(q) {
   }
 
   if (s.includes("scanner")) {
-    return "The scanner area is currently a preview. It needs a verified live market data feed before it can analyse live prices.";
+    return "The scanner area is currently a preview. It needs a verified analysis engine before it can analyse live prices.";
   }
 
   return "I can help with platform guidance, Even/Odd basics, volatility and risk-management education. This assistant is not connected to a live AI service.";
@@ -1099,6 +1367,7 @@ if (supabaseClient) {
 
       if (event === "SIGNED_OUT") {
         currentProfile = {};
+        stopDerivMarket();
         showAuth();
       }
     }
