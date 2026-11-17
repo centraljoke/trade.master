@@ -3,115 +3,135 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#081321">
-  <title>TradeMaster | Deriv Connection</title>
-
+  <title>TradeMaster | Connecting Deriv</title>
   <style>
-    * {
-      box-sizing: border-box;
-    }
-
     body {
       margin: 0;
       min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      background: #081321;
-      color: #ffffff;
+      display: grid;
+      place-items: center;
+      background: #101722;
+      color: #eef3fb;
       font-family: Arial, sans-serif;
     }
-
-    .container {
-      width: 100%;
-      max-width: 430px;
-      padding: 35px 25px;
+    .card {
+      width: min(88%, 420px);
+      padding: 28px;
+      background: #1b2534;
+      border: 1px solid #2b3547;
+      border-radius: 16px;
       text-align: center;
-      background: #142236;
-      border: 1px solid #263950;
-      border-radius: 18px;
     }
-
-    .logo {
-      font-size: 30px;
-      font-weight: bold;
-      color: #00c49a;
-    }
-
-    h2 {
-      margin-top: 25px;
-    }
-
-    p {
-      color: #aab8ca;
-      line-height: 1.6;
-    }
-
-    .status {
-      margin-top: 25px;
-      padding: 15px;
-      border-radius: 10px;
-      background: #1c3047;
-    }
-
-    .button {
+    h2 { color: #00c49a; }
+    p { color: #aab6c8; line-height: 1.6; }
+    a {
       display: inline-block;
-      margin-top: 20px;
-      padding: 13px 25px;
-      background: #00c49a;
-      color: #081321;
-      text-decoration: none;
+      margin-top: 15px;
+      padding: 12px 20px;
       border-radius: 8px;
+      background: #00c49a;
+      color: #101722;
+      text-decoration: none;
       font-weight: bold;
     }
   </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
-
 <body>
-
-  <div class="container">
-
-    <div class="logo">TradeMaster</div>
-
-    <h2>Deriv Account Connection</h2>
-
-    <p>
-      Welcome to TradeMaster.
-      We are processing your Deriv account authorization.
-    </p>
-
-    <div class="status" id="status">
-      Checking authorization...
-    </div>
-
-    <a href="/" class="button">
-      Return to TradeMaster
-    </a>
-
-  </div>
+  <main class="card">
+    <h2>TradeMaster</h2>
+    <p id="message">Processing your Deriv authorization...</p>
+    <div id="action"></div>
+  </main>
 
   <script>
-    const status = document.getElementById("status");
+    (async function () {
+      const SUPABASE_URL = "https://ftiavwxnxokmcdkazufw.supabase.co";
+      const SUPABASE_KEY = "sb_publishable_scG4LSH-fj0B9-WPCMgpGg_90uxk-MA";
+      const REDIRECT_URI = "https://hest-six.vercel.app/deriv-callback";
 
-    const params = new URLSearchParams(
-      window.location.search
-    );
+      const message = document.getElementById("message");
+      const action = document.getElementById("action");
 
-    const code = params.get("code");
-    const error = params.get("error");
+      function showError(text) {
+        message.textContent = text;
+        action.innerHTML = '<a href="/">Return to TradeMaster</a>';
+      }
 
-    if (error) {
-      status.textContent =
-        "Authorization was not completed. Please try again.";
-    } else if (code) {
-      status.textContent =
-        "Authorization received. Secure connection setup is pending.";
-    } else {
-      status.textContent =
-        "TradeMaster Deriv callback page is ready.";
-    }
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get("code");
+        const returnedState = params.get("state");
+        const providerError = params.get("error");
+
+        // Remove sensitive authorization parameters from browser history.
+        window.history.replaceState({}, document.title, window.location.pathname);
+
+        if (providerError) {
+          throw new Error("Deriv authorization was not approved.");
+        }
+
+        if (!code || !returnedState) {
+          throw new Error("Authorization code or state is missing.");
+        }
+
+        const savedState = sessionStorage.getItem("tm_deriv_oauth_state");
+        const verifier = sessionStorage.getItem("tm_deriv_code_verifier");
+
+        if (!savedState || returnedState !== savedState) {
+          throw new Error("Security check failed. Please reconnect.");
+        }
+
+        if (!verifier) {
+          throw new Error("Secure authorization session expired. Please reconnect.");
+        }
+
+        // Consume the temporary values before calling the backend.
+        sessionStorage.removeItem("tm_deriv_oauth_state");
+        sessionStorage.removeItem("tm_deriv_code_verifier");
+
+        const supabase = window.supabase.createClient(
+          SUPABASE_URL,
+          SUPABASE_KEY
+        );
+
+        const { data: sessionData, error: sessionError } =
+          await supabase.auth.getSession();
+
+        if (sessionError || !sessionData.session) {
+          throw new Error("Please log in to TradeMaster and connect Deriv again.");
+        }
+
+        message.textContent = "Securely connecting your Deriv account...";
+
+        const { data, error } = await supabase.functions.invoke(
+          "deriv-oauth-callback",
+          {
+            body: {
+              code: code,
+              code_verifier: verifier,
+              redirect_uri: REDIRECT_URI
+            }
+          }
+        );
+
+        if (error) {
+          throw new Error("The secure connection service could not complete the request.");
+        }
+
+        if (!data || !data.success || !data.connected) {
+          throw new Error(data?.error || "Deriv connection could not be completed.");
+        }
+
+        message.textContent = "Deriv authorization completed successfully!";
+
+        action.innerHTML = '<a href="/?deriv_connected=1">Return to TradeMaster</a>';
+
+      } catch (error) {
+        console.error("Deriv callback failed:", error);
+        showError(error.message || "Something went wrong. Please try again.");
+      }
+    })();
   </script>
-
 </body>
 </html>
