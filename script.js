@@ -1,7 +1,7 @@
 /* =====================================================
    TRADE MASTER
    SUPABASE + MPESA + DERIV + LIVE MARKET
-   DEMO WALLET + DEMO TRADING — UPDATED
+   SHARED REAL / DEMO TRADING INTERFACE
 ===================================================== */
 
 // ==========================================
@@ -49,11 +49,12 @@ let marketRawPrices = [];
 let marketLastPrice = null;
 
 // ==========================================
-// DEMO ACCOUNT VARIABLES
+// ACCOUNT VARIABLES
 // ==========================================
 
 let tradeMasterAccountMode = "REAL";
 let demoWalletBalance = 10000;
+let realAccountBalanceDisplay = "Loading...";
 let demoTradeBusy = false;
 let demoTradePending = false;
 
@@ -321,13 +322,12 @@ function enterDashboard() {
 }
 
 // ==========================================
-// LOAD REAL DERIV ACCOUNT BALANCE
+// REAL DERIV ACCOUNT BALANCE
 // ==========================================
 
 async function loadDerivAccounts() {
   if (!supabaseClient || !currentSession) return;
 
-  // Do not overwrite the Demo account display.
   if (tradeMasterAccountMode !== "REAL") return;
 
   const balanceElement = $("balanceValue");
@@ -340,6 +340,10 @@ async function loadDerivAccounts() {
   if (profileBalanceElement) {
     profileBalanceElement.value = "Loading REAL balance...";
   }
+
+  realAccountBalanceDisplay = "Loading...";
+
+  updateAccountSwitchDisplay();
 
   try {
     const { data, error } =
@@ -406,8 +410,8 @@ async function loadDerivAccounts() {
 
     const display = accountLines.join(" | ");
 
-    // Check again in case the user switched accounts
-    // while the network request was running.
+    realAccountBalanceDisplay = display;
+
     if (tradeMasterAccountMode === "REAL") {
       if (balanceElement) {
         balanceElement.textContent = display;
@@ -418,6 +422,8 @@ async function loadDerivAccounts() {
       profileBalanceElement.value = display;
     }
 
+    updateAccountSwitchDisplay();
+
     console.log(
       "REAL Deriv accounts loaded:",
       realAccounts.length
@@ -426,13 +432,21 @@ async function loadDerivAccounts() {
   } catch (error) {
     console.error("Deriv balance error:", error);
 
+    realAccountBalanceDisplay = "Unavailable";
+
     if (tradeMasterAccountMode === "REAL" && balanceElement) {
       balanceElement.textContent = "REAL balance unavailable";
+    }
+
+    if ($("tmRealBalance")) {
+      $("tmRealBalance").textContent = "Unavailable";
     }
 
     if (profileBalanceElement) {
       profileBalanceElement.value = "Unavailable";
     }
+
+    updateAccountSwitchDisplay();
   }
 }
 
@@ -507,7 +521,6 @@ function connectDerivMarket() {
 
         updateLiveChart();
         updateDigitStrip();
-        updateDemoMarketDisplay();
 
         if (
           marketSocket &&
@@ -553,7 +566,6 @@ function connectDerivMarket() {
 
         updateLiveChart();
         updateDigitStrip();
-        updateDemoMarketDisplay();
 
         setMarketStatus("Live market running");
       }
@@ -906,6 +918,8 @@ if ($("depositAmount")) {
 document.querySelectorAll("[data-amount]")
   .forEach(btn => {
     btn.addEventListener("click", () => {
+      if (!$("depositAmount")) return;
+
       $("depositAmount").value = btn.dataset.amount;
 
       document.querySelectorAll("[data-amount]")
@@ -1268,6 +1282,11 @@ document.querySelectorAll(".tabs .tab")
 
       btn.classList.add("selected");
 
+      if (tradeMasterAccountMode === "DEMO") {
+        loadTradeMasterDemoHistory();
+        return;
+      }
+
       const states = {
         open: [
           "No open positions",
@@ -1502,7 +1521,7 @@ if ($("saveProfileBtn")) {
 }
 
 // =====================================================
-// DEMO ACCOUNT STYLES
+// SHARED REAL / DEMO ACCOUNT SWITCHER
 // =====================================================
 
 function addDemoStyles() {
@@ -1515,22 +1534,24 @@ function addDemoStyles() {
     .tm-account-switch {
       display:flex;
       align-items:center;
-      gap:6px;
-      padding:7px;
+      gap:5px;
+      padding:4px;
       background:#172333;
       border:1px solid #34465c;
-      border-radius:12px;
-      margin:8px 0;
+      border-radius:10px;
+      flex-shrink:0;
     }
 
     .tm-account-switch button {
       border:0;
-      border-radius:8px;
-      padding:9px 14px;
+      border-radius:7px;
+      padding:8px 10px;
       color:#aab7c8;
       background:transparent;
+      font-size:12px;
       font-weight:800;
       cursor:pointer;
+      white-space:nowrap;
     }
 
     .tm-account-switch button.active {
@@ -1538,94 +1559,18 @@ function addDemoStyles() {
       color:white;
     }
 
-    .tm-demo-panel {
-      margin:12px 0;
-      padding:14px;
-      border:1px solid #30435a;
-      border-radius:14px;
-      background:#142131;
-      color:#f1f5f9;
-    }
-
-    .tm-demo-panel h3 {
-      margin:0 0 8px;
-      font-size:15px;
-      color:#f1f5f9;
-    }
-
-    .tm-demo-balance {
-      font-size:24px;
-      font-weight:900;
-      margin:8px 0;
-      color:#42d4b7;
-    }
-
-    .tm-demo-market {
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      gap:10px;
-      padding:10px;
-      margin-top:12px;
-      background:#0b1626;
-      border:1px solid #30435a;
-      border-radius:10px;
-    }
-
-    .tm-demo-market-price {
-      font-size:17px;
-      font-weight:900;
-      color:#f1f5f9;
-    }
-
-    .tm-demo-market-digit {
-      width:36px;
-      height:36px;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      border-radius:50%;
-      background:#087f68;
-      color:white;
-      font-size:18px;
-      font-weight:900;
-    }
-
-    .tm-demo-actions {
-      display:grid;
-      grid-template-columns:1fr 1fr;
-      gap:10px;
-      margin-top:12px;
-    }
-
-    .tm-demo-actions button {
-      min-height:48px;
-      border:0;
-      border-radius:10px;
-      font-weight:900;
-      cursor:pointer;
-      color:white;
-    }
-
-    .tm-demo-even {
-      background:#087f68;
-    }
-
-    .tm-demo-odd {
-      background:#2765bb;
-    }
-
-    .tm-demo-actions button:disabled {
-      opacity:.5;
-      cursor:not-allowed;
+    .tm-account-switch button:disabled {
+      opacity:.65;
+      cursor:default;
     }
 
     .tm-demo-result {
-      margin-top:12px;
-      padding:12px;
-      border-radius:10px;
+      margin:10px 0;
+      padding:10px;
+      border-radius:9px;
       display:none;
-      font-weight:900;
+      font-size:13px;
+      font-weight:800;
     }
 
     .tm-demo-result.win {
@@ -1633,8 +1578,6 @@ function addDemoStyles() {
       color:#42e6a4;
       background:rgba(0,200,130,.12);
       border:1px solid rgba(0,220,150,.35);
-      box-shadow:0 0 18px rgba(0,220,150,.25);
-      animation:tmWinGlow 1.4s ease-in-out infinite alternate;
     }
 
     .tm-demo-result.loss {
@@ -1642,8 +1585,6 @@ function addDemoStyles() {
       color:#ff6675;
       background:rgba(255,60,80,.12);
       border:1px solid rgba(255,60,80,.35);
-      box-shadow:0 0 18px rgba(255,60,80,.22);
-      animation:tmLossGlow 1.4s ease-in-out infinite alternate;
     }
 
     .tm-demo-result.pending {
@@ -1653,18 +1594,9 @@ function addDemoStyles() {
       border:1px solid rgba(243,201,105,.25);
     }
 
-    @keyframes tmWinGlow {
-      from { box-shadow:0 0 5px rgba(0,220,150,.12); }
-      to { box-shadow:0 0 20px rgba(0,220,150,.4); }
-    }
-
-    @keyframes tmLossGlow {
-      from { box-shadow:0 0 5px rgba(255,60,80,.12); }
-      to { box-shadow:0 0 20px rgba(255,60,80,.4); }
-    }
-
     .tm-demo-history {
-      margin-top:14px;
+      width:100%;
+      margin-top:8px;
       font-size:12px;
     }
 
@@ -1672,7 +1604,7 @@ function addDemoStyles() {
       display:flex;
       justify-content:space-between;
       gap:8px;
-      padding:10px 0;
+      padding:9px 0;
       border-bottom:1px solid #30435a;
     }
 
@@ -1691,18 +1623,21 @@ function addDemoStyles() {
       font-weight:900;
     }
 
-    .tm-demo-hidden {
-      display:none!important;
+    .tm-demo-note {
+      font-size:10px;
+      color:#94a3b8;
+      margin-top:5px;
     }
 
-    @media(max-width:600px) {
-      .tm-demo-panel {
-        width:100%;
-        padding:12px;
+    @media(max-width:680px) {
+      .tm-account-switch {
+        gap:2px;
+        padding:3px;
       }
 
-      .tm-demo-balance {
-        font-size:22px;
+      .tm-account-switch button {
+        padding:7px 6px;
+        font-size:10px;
       }
     }
   `;
@@ -1710,9 +1645,9 @@ function addDemoStyles() {
   document.head.appendChild(style);
 }
 
-// =====================================================
-// CREATE DEMO ACCOUNT INTERFACE
-// =====================================================
+// ==========================================
+// CREATE SHARED ACCOUNT SWITCHER
+// ==========================================
 
 function createDemoInterface() {
   if ($("tmAccountSwitch")) return;
@@ -1727,11 +1662,11 @@ function createDemoInterface() {
 
   switcher.innerHTML = `
     <button type="button" id="tmRealMode" class="active">
-      R Real
+      R <span id="tmRealBalance">Loading...</span>
     </button>
 
     <button type="button" id="tmDemoMode">
-      D Demo
+      D <span id="tmDemoBalance">$10,000.00</span>
     </button>
   `;
 
@@ -1741,155 +1676,181 @@ function createDemoInterface() {
     $("app").prepend(switcher);
   }
 
-  const panel = document.createElement("section");
-  panel.id = "tmDemoPanel";
-  panel.className = "tm-demo-panel tm-demo-hidden";
+  const result = document.createElement("div");
+  result.id = "tmDemoResult";
+  result.className = "tm-demo-result";
 
-  panel.innerHTML = `
-    <h3>Demo Trading Account</h3>
+  const tradePanel = document.querySelector(".trade-panel");
 
-    <div class="tm-demo-balance" id="tmDemoBalance">
-      $10,000.00
-    </div>
+  if (tradePanel) {
+    const tradeButtons = $("evenBtn")?.parentElement;
 
-    <small>Virtual funds · Simulated trading</small>
+    if (tradeButtons && tradeButtons.parentElement === tradePanel) {
+      tradeButtons.insertAdjacentElement("afterend", result);
+    } else {
+      tradePanel.appendChild(result);
+    }
 
-    <div class="tm-demo-market">
-      <div>
-        <small>Live market price</small>
-        <div class="tm-demo-market-price" id="tmDemoMarketPrice">
-          Waiting for market...
-        </div>
-      </div>
+    const note = document.createElement("div");
+    note.id = "tmDemoNote";
+    note.className = "tm-demo-note";
+    note.textContent = "Demo mode uses virtual funds and simulated trades.";
 
-      <div>
-        <small>Last digit</small>
-        <div class="tm-demo-market-digit" id="tmDemoMarketDigit">
-          -
-        </div>
-      </div>
-    </div>
-
-    <div class="tm-demo-actions">
-      <button type="button"
-        class="tm-demo-even"
-        id="tmDemoEven">
-        EVEN
-      </button>
-
-      <button type="button"
-        class="tm-demo-odd"
-        id="tmDemoOdd">
-        ODD
-      </button>
-    </div>
-
-    <div id="tmDemoResult" class="tm-demo-result"></div>
-
-    <div class="tm-demo-history">
-      <strong>Demo Trade History</strong>
-      <div id="tmDemoHistory">
-        Loading history...
-      </div>
-    </div>
-  `;
-
-  const workspace = document.querySelector(".workspace");
-
-  if (workspace) {
-    workspace.prepend(panel);
-  } else if ($("app")) {
-    $("app").appendChild(panel);
+    result.insertAdjacentElement("afterend", note);
   }
 
-  $("tmRealMode").addEventListener("click", () => {
-    switchTradeMasterAccount("REAL");
-  });
-
-  $("tmDemoMode").addEventListener("click", () => {
-    switchTradeMasterAccount("DEMO");
-  });
-
-  $("tmDemoEven").addEventListener("click", () => {
-    placeTradeMasterDemoTrade("EVEN");
-  });
-
-  $("tmDemoOdd").addEventListener("click", () => {
-    placeTradeMasterDemoTrade("ODD");
-  });
-
-  updateDemoMarketDisplay();
-}
-
-// =====================================================
-// DISPLAY LIVE MARKET IN DEMO PANEL
-// =====================================================
-
-function updateDemoMarketDisplay() {
-  const priceElement = $("tmDemoMarketPrice");
-  const digitElement = $("tmDemoMarketDigit");
-
-  if (!priceElement || !digitElement) return;
-
-  if (!marketRawPrices.length) {
-    priceElement.textContent = "Waiting for market...";
-    digitElement.textContent = "-";
-    return;
+  if ($("tmRealMode")) {
+    $("tmRealMode").addEventListener("click", () => {
+      switchTradeMasterAccount("REAL");
+    });
   }
 
-  const latestRaw =
-    marketRawPrices[marketRawPrices.length - 1];
+  if ($("tmDemoMode")) {
+    $("tmDemoMode").addEventListener("click", () => {
+      switchTradeMasterAccount("DEMO");
+    });
+  }
 
-  const latestDigit = getLastDigit(latestRaw);
+  if ($("evenBtn")) {
+    $("evenBtn").addEventListener("click", () => {
+      if (tradeMasterAccountMode === "DEMO") {
+        placeTradeMasterDemoTrade("EVEN");
+      } else {
+        toast("Real trade execution is not connected yet.");
+      }
+    });
+  }
 
-  priceElement.textContent = String(latestRaw);
+  if ($("oddBtn")) {
+    $("oddBtn").addEventListener("click", () => {
+      if (tradeMasterAccountMode === "DEMO") {
+        placeTradeMasterDemoTrade("ODD");
+      } else {
+        toast("Real trade execution is not connected yet.");
+      }
+    });
+  }
 
-  digitElement.textContent =
-    latestDigit === null ? "-" : String(latestDigit);
+  updateAccountSwitchDisplay();
+  updateDemoTradeButtons();
 }
 
-// =====================================================
+// ==========================================
+// UPDATE ACCOUNT BALANCE DISPLAY
+// ==========================================
+
+function updateAccountSwitchDisplay() {
+  const realBalance = $("tmRealBalance");
+  const demoBalance = $("tmDemoBalance");
+
+  if (realBalance) {
+    realBalance.textContent = realAccountBalanceDisplay;
+  }
+
+  if (demoBalance) {
+    demoBalance.textContent = money(demoWalletBalance);
+  }
+
+  if ($("tmRealMode")) {
+    $("tmRealMode").classList.toggle(
+      "active",
+      tradeMasterAccountMode === "REAL"
+    );
+  }
+
+  if ($("tmDemoMode")) {
+    $("tmDemoMode").classList.toggle(
+      "active",
+      tradeMasterAccountMode === "DEMO"
+    );
+  }
+}
+
+// ==========================================
 // SWITCH REAL / DEMO
-// =====================================================
+// ==========================================
 
 async function switchTradeMasterAccount(mode) {
   if (mode !== "REAL" && mode !== "DEMO") return;
 
+  if (tradeMasterAccountMode === mode) return;
+
   tradeMasterAccountMode = mode;
 
-  $("tmRealMode").classList.toggle(
-    "active",
-    mode === "REAL"
-  );
-
-  $("tmDemoMode").classList.toggle(
-    "active",
-    mode === "DEMO"
-  );
-
-  $("tmDemoPanel").classList.toggle(
-    "tm-demo-hidden",
-    mode !== "DEMO"
-  );
-
-  const balanceElement = $("balanceValue");
+  updateAccountSwitchDisplay();
+  updateDemoTradeButtons();
 
   if (mode === "DEMO") {
-    if (balanceElement) {
-      balanceElement.textContent = "DEMO ACCOUNT";
+    if ($("balanceValue")) {
+      $("balanceValue").textContent =
+        "DEMO " + money(demoWalletBalance);
+    }
+
+    if ($("tmDemoNote")) {
+      $("tmDemoNote").hidden = false;
     }
 
     await loadTradeMasterDemoWallet();
     await loadTradeMasterDemoHistory();
 
+    if ($("positionsState")) {
+      $("positionsState").scrollTop = 0;
+    }
+
   } else {
+    if ($("balanceValue")) {
+      $("balanceValue").textContent =
+        realAccountBalanceDisplay;
+    }
+
+    if ($("tmDemoNote")) {
+      $("tmDemoNote").hidden = true;
+    }
+
+    showRealPositionsPlaceholder();
     loadDerivAccounts();
   }
 }
 
-// =====================================================
+// ==========================================
+// RESTORE REAL POSITIONS PLACEHOLDER
+// ==========================================
+
+function showRealPositionsPlaceholder() {
+  const selectedTab =
+    document.querySelector(".tabs .tab.selected");
+
+  const tab = selectedTab?.dataset.tab || "open";
+
+  const states = {
+    open: [
+      "No open positions",
+      "Your active trades will appear here"
+    ],
+    closed: [
+      "No closed positions",
+      "Your completed trades will appear here"
+    ],
+    transactions: [
+      "No transactions yet",
+      "Your account activity will appear here"
+    ]
+  };
+
+  const [title, sub] = states[tab] || states.open;
+
+  if ($("positionsState")) {
+    $("positionsState").innerHTML = `
+      <div class="target">◎</div>
+      <strong>${title}</strong>
+      <span>${sub}</span>
+    `;
+  }
+}
+
+// ==========================================
 // LOAD DEMO WALLET FROM SUPABASE
-// =====================================================
+// ==========================================
 
 async function loadTradeMasterDemoWallet() {
   if (!supabaseClient || !currentSession) return;
@@ -1913,15 +1874,12 @@ async function loadTradeMasterDemoWallet() {
 
   demoWalletBalance = Number(data.balance);
 
-  if ($("tmDemoBalance")) {
-    $("tmDemoBalance").textContent =
-      money(demoWalletBalance);
-  }
+  updateAccountSwitchDisplay();
 }
 
-// =====================================================
+// ==========================================
 // CHECK FOR UNSETTLED DEMO TRADES
-// =====================================================
+// ==========================================
 
 async function hasOpenDemoTrade() {
   if (!supabaseClient || !currentSession) return false;
@@ -1943,17 +1901,26 @@ async function hasOpenDemoTrade() {
   return Array.isArray(data) && data.length > 0;
 }
 
-// =====================================================
+// ==========================================
 // LOAD DEMO TRADE HISTORY
-// =====================================================
+// ==========================================
 
 async function loadTradeMasterDemoHistory() {
   if (!supabaseClient || !currentSession) return;
 
-  const history = $("tmDemoHistory");
+  const history = $("positionsState");
   if (!history) return;
 
-  history.textContent = "Loading history...";
+  if (tradeMasterAccountMode !== "DEMO") return;
+
+  history.innerHTML = `
+    <div class="tm-demo-history">
+      <strong>Demo Trade History</strong>
+      <div id="tmDemoHistoryList">Loading history...</div>
+    </div>
+  `;
+
+  const historyList = $("tmDemoHistoryList");
 
   const { data, error } = await supabaseClient
     .from("demo_trades")
@@ -1966,12 +1933,21 @@ async function loadTradeMasterDemoHistory() {
 
   if (error) {
     console.error("Demo history error:", error);
-    history.textContent = "Unable to load trade history.";
+
+    if (historyList) {
+      historyList.textContent = "Unable to load trade history.";
+    }
+
     return;
   }
 
   if (!data || data.length === 0) {
-    history.textContent = "No Demo trades yet.";
+    if (historyList) {
+      historyList.textContent = "No Demo trades yet.";
+    }
+
+    demoTradePending = false;
+    updateDemoTradeButtons();
     return;
   }
 
@@ -1981,49 +1957,51 @@ async function loadTradeMasterDemoHistory() {
 
   demoTradePending = hasOpen;
 
-  history.innerHTML = data.map(trade => {
-    const status = String(trade.status || "").toUpperCase();
+  if (historyList) {
+    historyList.innerHTML = data.map(trade => {
+      const status = String(trade.status || "").toUpperCase();
 
-    const resultClass =
-      status === "WON" ? "won" :
-      status === "LOST" ? "lost" : "open";
+      const resultClass =
+        status === "WON" ? "won" :
+        status === "LOST" ? "lost" : "open";
 
-    const date = new Date(trade.created_at)
-      .toLocaleString();
+      const date = new Date(trade.created_at)
+        .toLocaleString();
 
-    let resultText = status;
+      let resultText = status;
 
-    if (status === "WON") {
-      resultText += " ↓ +" + money(trade.profit);
-    } else if (status === "LOST") {
-      resultText += " ↓ -" + money(trade.stake);
-    } else if (status === "OPEN") {
-      resultText = "PENDING";
-    }
+      if (status === "WON") {
+        resultText += " + " + money(trade.profit);
+      } else if (status === "LOST") {
+        resultText += " - " + money(trade.stake);
+      } else if (status === "OPEN") {
+        resultText = "PENDING";
+      }
 
-    return `
-      <div class="tm-demo-history-row">
-        <div>
-          <strong>${trade.contract_type}</strong>
-          <br>
-          <small>${date}</small>
+      return `
+        <div class="tm-demo-history-row">
+          <div>
+            <strong>${trade.contract_type}</strong>
+            <br>
+            <small>${date}</small>
+          </div>
+
+          <div style="text-align:right">
+            <strong>${money(trade.stake)}</strong>
+            <br>
+            <span class="${resultClass}">${resultText}</span>
+          </div>
         </div>
-
-        <div style="text-align:right">
-          <strong>${money(trade.stake)}</strong>
-          <br>
-          <span class="${resultClass}">${resultText}</span>
-        </div>
-      </div>
-    `;
-  }).join("");
+      `;
+    }).join("");
+  }
 
   updateDemoTradeButtons();
 }
 
-// =====================================================
+// ==========================================
 // DISPLAY DEMO RESULT
-// =====================================================
+// ==========================================
 
 function showTradeMasterDemoResult(type, message) {
   const box = $("tmDemoResult");
@@ -2033,39 +2011,47 @@ function showTradeMasterDemoResult(type, message) {
   box.textContent = message;
 }
 
-// =====================================================
-// UPDATE DEMO TRADE BUTTONS
-// =====================================================
+// ==========================================
+// UPDATE SHARED TRADE BUTTONS
+// ==========================================
 
 function updateDemoTradeButtons() {
-  const evenButton = $("tmDemoEven");
-  const oddButton = $("tmDemoOdd");
+  const evenButton = $("evenBtn");
+  const oddButton = $("oddBtn");
 
   if (!evenButton || !oddButton) return;
 
+  const isDemo =
+    tradeMasterAccountMode === "DEMO";
+
   const disabled =
+    !isDemo ||
     demoTradeBusy ||
-    demoTradePending ||
-    tradeMasterAccountMode !== "DEMO";
+    demoTradePending;
 
   evenButton.disabled = disabled;
   oddButton.disabled = disabled;
 
-  if (demoTradePending && !demoTradeBusy) {
-    evenButton.textContent = "TRADE PENDING";
-    oddButton.textContent = "TRADE PENDING";
-  } else if (demoTradeBusy) {
-    evenButton.textContent = "PLEASE WAIT...";
-    oddButton.textContent = "PLEASE WAIT...";
+  if (isDemo) {
+    if (demoTradePending && !demoTradeBusy) {
+      evenButton.textContent = "TRADE PENDING";
+      oddButton.textContent = "TRADE PENDING";
+    } else if (demoTradeBusy) {
+      evenButton.textContent = "PLEASE WAIT...";
+      oddButton.textContent = "PLEASE WAIT...";
+    } else {
+      evenButton.textContent = "EVEN";
+      oddButton.textContent = "ODD";
+    }
   } else {
     evenButton.textContent = "EVEN";
     oddButton.textContent = "ODD";
   }
 }
 
-// =====================================================
+// ==========================================
 // PLACE DEMO TRADE
-// =====================================================
+// ==========================================
 
 async function placeTradeMasterDemoTrade(contractType) {
   if (demoTradeBusy || demoTradePending) {
@@ -2106,7 +2092,6 @@ async function placeTradeMasterDemoTrade(contractType) {
   }
 
   try {
-    // Check Supabase before starting a new trade.
     const existingOpenTrade = await hasOpenDemoTrade();
 
     if (existingOpenTrade) {
@@ -2190,13 +2175,13 @@ async function placeTradeMasterDemoTrade(contractType) {
     if (won) {
       showTradeMasterDemoResult(
         "win",
-        "↓ PROFIT +" + money(profit) +
+        "PROFIT +" + money(profit) +
         " · Payout " + money(payout)
       );
     } else {
       showTradeMasterDemoResult(
         "loss",
-        "↓ LOSS -" + money(stake)
+        "LOSS -" + money(stake)
       );
     }
 
@@ -2210,8 +2195,6 @@ async function placeTradeMasterDemoTrade(contractType) {
   } catch (error) {
     console.error("Demo trade error:", error);
 
-    // A network failure can happen after the server creates
-    // a trade. Never automatically submit the same trade again.
     showTradeMasterDemoResult(
       "pending",
       "Result not confirmed. Checking your Demo trade history. Do not retry yet."
@@ -2247,9 +2230,9 @@ async function placeTradeMasterDemoTrade(contractType) {
   }
 }
 
-// =====================================================
-// INITIALIZE DEMO INTERFACE
-// =====================================================
+// ==========================================
+// INITIALIZE SHARED ACCOUNT INTERFACE
+// ==========================================
 
 function initializeTradeMasterDemo() {
   if (!currentSession || !$("app")) return;
@@ -2259,12 +2242,12 @@ function initializeTradeMasterDemo() {
   loadTradeMasterDemoWallet();
   loadTradeMasterDemoHistory();
 
-  updateDemoMarketDisplay();
+  updateDemoTradeButtons();
 }
 
-// =====================================================
+// ==========================================
 // RESTORE SUPABASE SESSION
-// =====================================================
+// ==========================================
 
 (async function init() {
   updatePayout();
@@ -2328,4 +2311,4 @@ if (supabaseClient) {
 }
 
 console.log("Trade Master application script loaded.");
-console.log("Trade Master Demo module loaded.");
+console.log("Trade Master shared REAL / DEMO interface loaded.");
