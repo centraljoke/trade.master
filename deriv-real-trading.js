@@ -1,842 +1,906 @@
-/* =====================================================
-   TRADE MASTER — AUTHENTICATED DERIV REAL TRADING
-   Live proposal → user confirmation → purchase
-   Contract settlement monitoring
-===================================================== */
+/* =========================================================
+   TRADE MASTER — OUR OWN EVEN / ODD BUTTONS
+   DERIV AUTHENTICATED REAL ACCOUNT
+   LIVE PROPOSALS | CONFIRMED PURCHASES | LIVE RESULTS
+========================================================= */
 
 (() => {
   "use strict";
 
+  const BALANCE_FUNCTION = "deriv-account-balance";
+  const SESSION_FUNCTION = "deriv-websocket-session";
+
   const SYMBOL = "1HZ10V";
-  const MIN_STAKE = 0.35;
+  const DURATION = 1;
+  const DURATION_UNIT = "t";
+
+  let ws = null;
+  let connected = false;
+  let connecting = false;
+  let trading = false;
 
   let accounts = [];
-  let selectedRealAccount = null;
-
-  let tradingSocket = null;
-  let socketPromise = null;
-
-  let requestCounter = 100;
-  let pendingRequests = new Map();
-
-  let realTradeBusy = false;
+  let selectedAccount = null;
+  let pendingProposal = null;
   let activeContractId = null;
 
-  let proposalSubscriptionId = null;
+  let requestNumber = 500;
+  const requests = new Map();
 
-  const $ = id => document.getElementById(id);
+  const $ = (id) => document.getElementById(id);
 
-  const money = value =>
-    "$" + Number(value || 0).toLocaleString("en-US", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    });
+  function supabase() {
+    if (typeof supabaseClient !== "undefined") {
+      return supabaseClient;
+    }
+    if (window.supabaseClient) {
+      return window.supabaseClient;
+    }
+    throw new Error("Supabase client unavailable.");
+  }
 
-  function showMessage(message) {
+  function mode() {
+    try {
+      if (typeof tradeMasterAccountMode !== "undefined") {
+        return String(tradeMasterAccountMode).toUpperCase();
+      }
+    } catch (_) {}
+
+    const realButton = $("tmRealMode");
+    const demoButton = $("tmDemoMode");
+
+    if (realButton && realButton.classList.contains("active")) {
+      return "REAL";
+    }
+
+    if (demoButton && demoButton.classList.contains("active")) {
+      return "DEMO";
+    }
+
+    return "REAL";
+  }
+
+  function notify(message) {
     if (typeof toast === "function") {
       toast(message);
     } else {
-      console.log(message);
+      alert(message);
     }
   }
 
-  function extractAccounts(payload) {
-    const found = [];
+  function setStatus(message, success = connected) {
+    const status = $("tmrStatus");
+    const dot = $("tmrDot");
 
-    function scan(value, depth = 0) {
-      if (!value || depth > 5) return;
-
-      if (Array.isArray(value)) {
-        if (value.some(item => item?.account_id)) {
-          value.forEach(item => {
-            if (item?.account_id) found.push(item);
-          });
-          return;
-        }
-
-        value.forEach(item => scan(item, depth + 1));
-        return;
-      }
-
-      if (typeof value === "object") {
-        for (const [key, child] of Object.entries(value)) {
-          if (
-            key === "account_id" &&
-            typeof child === "string"
-          ) {
-            found.push(value);
-            return;
-          }
-
-          scan(child, depth + 1);
-        }
-      }
-    }
-
-    scan(payload);
-
-    return [
-      ...new Map(
-        found.map(account => [
-          String(account.account_id),
-          account
-        ])
-      ).values()
-    ];
+    if (status) status.textContent = message;
+    if (dot) dot.style.color = success ? "#00d49a" : "#ff4545";
   }
 
-  function isRealAccount(account) {
-    const type = String(
-      account.account_type ||
-      account.type ||
+  function cash(value) {
+    const n = Number(value);
+    return "$" + (Number.isFinite(n) ? n.toFixed(2) : "0.00");
+  }
+
+  function getAccountId(account) {
+    return String(
+      account?.account_id ||
+      account?.accountId ||
+      account?.loginid ||
+      account?.id ||
       ""
-    ).toLowerCase();
-
-    return (
-      account.is_virtual === false ||
-      type === "real" ||
-      type === "financial" ||
-      type.includes("real_money")
     );
   }
 
-  function accountLabel(account) {
-    const id = account.account_id;
-    const currency = account.currency || "USD";
-    const balance = Number(account.balance || 0);
-
-    return `${id} · ${currency} ${balance.toFixed(2)}`;
+  function getCurrency(account) {
+    return String(
+      account?.currency ||
+      account?.currency_code ||
+      "USD"
+    ).toUpperCase();
   }
 
-  function createAccountSelector() {
-    const switcher = $("tmAccountSwitch");
+  function getBalance(account) {
+    const n = Number(account?.balance ?? account?.account_balance ?? 0);
+    return Number.isFinite(n) ? n : 0;
+  }
 
-    if (!switcher || $("tmRealAccountSelect")) return;
+  function isReal(account) {
+    if (account?.is_virtual === false) return true;
+    if (account?.is_virtual === true) return false;
 
-    const select = document.createElement("select");
+    const type = String(
+      account?.account_type ||
+      account?.type ||
+      account?.account_category ||
+      ""
+    ).toLowerCase();
 
-    select.id = "tmRealAccountSelect";
-    select.setAttribute("aria-label", "Select Deriv Real account");
+    return type.includes("real") ||
+      type.includes("financial") ||
+      type.includes("investment");
+  }
 
-    select.style.cssText = `
-      max-width:145px;
-      min-width:90px;
-      padding:7px 5px;
-      border-radius:7px;
-      border:1px solid #40536c;
-      background:#101b2b;
-      color:#eef3fb;
-      font-size:10px;
-      font-weight:700;
+  function findAccounts(value) {
+    if (!value) return [];
+
+    if (Array.isArray(value)) {
+      return value.flatMap(item => {
+        if (!item || typeof item !== "object") return [];
+
+        if (
+          item.account_id ||
+          item.accountId ||
+          item.loginid ||
+          item.id
+        ) return [item];
+
+        return findAccounts(item);
+      });
+    }
+
+    if (typeof value === "object") {
+      for (const key of ["accounts", "data", "results", "items"]) {
+        if (value[key]) {
+          const result = findAccounts(value[key]);
+          if (result.length) return result;
+        }
+      }
+    }
+
+    return [];
+  }
+
+  function buildInterface() {
+    if ($("tmrOwnTrading")) return;
+
+    const panel = document.createElement("section");
+    panel.id = "tmrOwnTrading";
+
+    panel.innerHTML = `
+      <div class="tmr-top">
+        <div>
+          <strong>TRADE MASTER</strong>
+          <small>REAL MARKET TRADING</small>
+        </div>
+        <span id="tmrDot">●</span>
+      </div>
+
+      <div class="tmr-connection">
+        <select id="tmrAccount">
+          <option value="">Loading real accounts...</option>
+        </select>
+        <button id="tmrConnect" type="button">CONNECT</button>
+      </div>
+
+      <div class="tmr-status" id="tmrStatus">
+        Waiting for Deriv connection...
+      </div>
+
+      <div class="tmr-balance">
+        <span>REAL ACCOUNT BALANCE</span>
+        <strong id="tmrBalance">R $0.00</strong>
+      </div>
+
+      <div class="tmr-stake">
+        <label for="tmrStake">TRADE STAKE (USD)</label>
+        <input id="tmrStake" type="number" min="0.35"
+          step="0.01" value="1">
+      </div>
+
+      <div class="tmr-buttons">
+        <button id="tmrEven" type="button" disabled>
+          <span>EVEN</span>
+          <small>00 · 02 · 04 · 06 · 08</small>
+        </button>
+
+        <button id="tmrOdd" type="button" disabled>
+          <span>ODD</span>
+          <small>01 · 03 · 05 · 07 · 09</small>
+        </button>
+      </div>
+
+      <div class="tmr-calculator">
+        <div>
+          <small>Potential payout</small>
+          <strong id="tmrPayout">$0.00</strong>
+        </div>
+        <div>
+          <small>Potential profit</small>
+          <strong id="tmrProfit">$0.00</strong>
+        </div>
+        <div>
+          <small>Maximum loss</small>
+          <strong id="tmrLoss">$0.00</strong>
+        </div>
+        <div>
+          <small>Actual result</small>
+          <strong id="tmrResult">—</strong>
+        </div>
+      </div>
+
+      <div id="tmrConfirmBox" hidden>
+        <p id="tmrConfirmText"></p>
+        <div class="tmr-confirm-actions">
+          <button id="tmrCancel" type="button">CANCEL</button>
+          <button id="tmrBuy" type="button">CONFIRM PURCHASE</button>
+        </div>
+      </div>
+
+      <div class="tmr-foot">
+        One-tick EVEN / ODD contract · Volatility 10 (1s)
+      </div>
     `;
 
-    select.addEventListener("change", () => {
-      selectedRealAccount = accounts.find(
-        account =>
-          String(account.account_id) === select.value
+    const style = document.createElement("style");
+    style.textContent = `
+      #tmrOwnTrading {
+        width:100%;
+        box-sizing:border-box;
+        padding:14px;
+        margin:10px 0;
+        border:1px solid #2c3b50;
+        border-radius:13px;
+        background:#101a2a;
+        color:#f1f5fb;
+        font-family:inherit;
+      }
+
+      #tmrOwnTrading * { box-sizing:border-box; }
+
+      .tmr-top,.tmr-connection,.tmr-balance {
+        display:flex;
+        align-items:center;
+        justify-content:space-between;
+        gap:10px;
+      }
+
+      .tmr-top strong {
+        display:block;
+        font-size:14px;
+        letter-spacing:1px;
+      }
+
+      .tmr-top small,.tmr-status,.tmr-foot {
+        color:#93a4bb;
+        font-size:11px;
+      }
+
+      .tmr-top small { display:block; margin-top:3px; }
+      #tmrDot { color:#ff4545; }
+
+      .tmr-connection { margin-top:13px; }
+
+      .tmr-connection select {
+        flex:1;
+        min-width:0;
+        background:#091321;
+        border:1px solid #34445b;
+        border-radius:8px;
+        color:white;
+        padding:11px 8px;
+      }
+
+      .tmr-connection button {
+        background:#087fce;
+        color:white;
+        border:0;
+        border-radius:8px;
+        padding:11px;
+        font-weight:800;
+      }
+
+      .tmr-status {
+        margin-top:9px;
+        min-height:16px;
+      }
+
+      .tmr-balance {
+        background:#091321;
+        border-radius:8px;
+        padding:12px;
+        margin-top:12px;
+      }
+
+      .tmr-balance span,.tmr-stake label {
+        font-size:10px;
+        color:#93a4bb;
+      }
+
+      .tmr-balance strong {
+        color:#00d49a;
+        font-size:17px;
+      }
+
+      .tmr-stake { margin-top:12px; }
+      .tmr-stake label { display:block; margin-bottom:6px; }
+
+      .tmr-stake input {
+        width:100%;
+        padding:11px;
+        color:white;
+        background:#091321;
+        border:1px solid #34445b;
+        border-radius:8px;
+        font-size:16px;
+      }
+
+      .tmr-buttons {
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:10px;
+        margin-top:12px;
+      }
+
+      .tmr-buttons button {
+        min-height:76px;
+        border:0;
+        border-radius:10px;
+        color:white;
+        font-weight:900;
+        font-size:21px;
+        cursor:pointer;
+      }
+
+      #tmrEven { background:#079b68; }
+      #tmrOdd { background:#d93643; }
+
+      .tmr-buttons button small {
+        display:block;
+        font-size:10px;
+        margin-top:6px;
+        font-weight:600;
+      }
+
+      .tmr-buttons button:disabled {
+        opacity:.4;
+        cursor:not-allowed;
+      }
+
+      .tmr-calculator {
+        display:grid;
+        grid-template-columns:1fr 1fr;
+        gap:8px;
+        margin-top:12px;
+      }
+
+      .tmr-calculator div {
+        background:#1a293d;
+        padding:10px;
+        border-radius:8px;
+      }
+
+      .tmr-calculator small {
+        display:block;
+        color:#93a4bb;
+        font-size:10px;
+      }
+
+      .tmr-calculator strong {
+        display:block;
+        margin-top:5px;
+        font-size:14px;
+      }
+
+      #tmrConfirmBox {
+        margin-top:12px;
+        padding:12px;
+        border:1px solid #c89532;
+        border-radius:9px;
+        background:#302714;
+      }
+
+      #tmrConfirmText {
+        font-size:12px;
+        line-height:1.6;
+      }
+
+      .tmr-confirm-actions {
+        display:flex;
+        gap:8px;
+      }
+
+      .tmr-confirm-actions button {
+        flex:1;
+        border:0;
+        border-radius:8px;
+        padding:11px 5px;
+        font-weight:800;
+      }
+
+      #tmrCancel { background:#34445b;color:white; }
+      #tmrBuy { background:#00b887;color:#041b15; }
+
+      .tmr-foot {
+        margin-top:12px;
+        text-align:center;
+      }
+    `;
+
+    document.head.appendChild(style);
+
+    const parent =
+      document.querySelector(".trade-panel") ||
+      document.querySelector("#tradePanel") ||
+      document.querySelector(".workspace");
+
+    if (parent) {
+      parent.prepend(panel);
+    } else {
+      document.body.appendChild(panel);
+    }
+
+    $("tmrConnect").addEventListener("click", connect);
+    $("tmrEven").addEventListener("click", () => requestTrade("EVEN"));
+    $("tmrOdd").addEventListener("click", () => requestTrade("ODD"));
+    $("tmrBuy").addEventListener("click", buyTrade);
+    $("tmrCancel").addEventListener("click", cancelTrade);
+
+    $("tmrAccount").addEventListener("change", event => {
+      selectedAccount = accounts.find(
+        item => getAccountId(item) === event.target.value
       ) || null;
 
-      closeTradingSocket();
+      disconnect();
 
-      updateRealButtons();
+      updateBalance();
+      setStatus("Account selected. Press CONNECT.");
     });
-
-    switcher.appendChild(select);
-
-    updateAccountSelector();
   }
 
-  function updateAccountSelector() {
-    const select = $("tmRealAccountSelect");
+  async function loadAccounts() {
+    const { data, error } = await supabase().functions.invoke(
+      BALANCE_FUNCTION,
+      { body: {} }
+    );
 
-    if (!select) return;
+    if (error) throw new Error(error.message);
+    if (!data?.success) {
+      throw new Error(data?.error || "Could not load accounts.");
+    }
 
-    const realAccounts = accounts.filter(isRealAccount);
+    accounts = findAccounts(data.accounts).filter(isReal);
 
+    const select = $("tmrAccount");
     select.innerHTML = "";
 
-    realAccounts.forEach(account => {
+    if (!accounts.length) {
+      select.innerHTML =
+        '<option value="">No real accounts found</option>';
+      throw new Error("No real Deriv account was found.");
+    }
+
+    accounts.forEach(account => {
       const option = document.createElement("option");
-
-      option.value = String(account.account_id);
-      option.textContent = accountLabel(account);
-
+      option.value = getAccountId(account);
+      option.textContent =
+        `${getAccountId(account)} — ${getCurrency(account)} ${getBalance(account).toFixed(2)}`;
       select.appendChild(option);
     });
 
-    if (selectedRealAccount) {
-      select.value = String(selectedRealAccount.account_id);
-    }
-
-    select.disabled = realAccounts.length === 0;
+    selectedAccount = accounts[0];
+    select.value = getAccountId(selectedAccount);
+    updateBalance();
   }
 
-  async function loadRealTradingAccounts() {
-    if (!window.supabase || !currentSession) return;
+  function updateBalance() {
+    if (!selectedAccount) return;
+
+    $("tmrBalance").textContent =
+      `R ${getCurrency(selectedAccount)} ${getBalance(selectedAccount).toFixed(2)}`;
+  }
+
+  async function connect() {
+    if (connecting) return;
+
+    connecting = true;
+    $("tmrConnect").disabled = true;
+    $("tmrConnect").textContent = "CONNECTING";
 
     try {
-      const { data, error } =
-        await supabaseClient.functions.invoke(
-          "deriv-account-balance",
-          { body: {} }
-        );
+      if (!selectedAccount) await loadAccounts();
 
-      if (error) throw error;
+      const { data, error } = await supabase().functions.invoke(
+        SESSION_FUNCTION,
+        {
+          body: {
+            account_id: getAccountId(selectedAccount),
+            mode: "REAL"
+          }
+        }
+      );
 
-      if (!data?.success) {
-        throw new Error(
-          data?.error || "Could not load Deriv accounts."
-        );
+      if (error) throw new Error(error.message);
+      if (!data?.success || !data.url) {
+        throw new Error(data?.error || "Deriv session failed.");
       }
 
-      accounts = extractAccounts(data.accounts);
+      disconnect();
 
-      const realAccounts = accounts.filter(isRealAccount);
+      ws = new WebSocket(data.url);
 
-      if (!realAccounts.length) {
-        selectedRealAccount = null;
+      ws.onopen = () => {
+        connected = true;
+        connecting = false;
 
-        updateAccountSelector();
-        updateRealButtons();
+        $("tmrConnect").disabled = false;
+        $("tmrConnect").textContent = "CONNECTED";
 
-        showMessage("No Real Deriv account was found.");
+        setStatus("Authenticated real trading connection ready.", true);
+        updateButtons();
+        refreshBalance();
+      };
+
+      ws.onmessage = event => {
+        let message;
+
+        try {
+          message = JSON.parse(event.data);
+        } catch (_) {
+          return;
+        }
+
+        handleMessage(message);
+      };
+
+      ws.onerror = () => {
+        setStatus("WebSocket connection error.", false);
+      };
+
+      ws.onclose = () => {
+        connected = false;
+        connecting = false;
+        trading = false;
+
+        $("tmrConnect").disabled = false;
+        $("tmrConnect").textContent = "CONNECT";
+        setStatus("Trading connection closed.", false);
+        updateButtons();
+
+        requests.forEach(item => item.reject(
+          new Error("Deriv connection closed.")
+        ));
+        requests.clear();
+      };
+
+    } catch (error) {
+      connected = false;
+      connecting = false;
+      $("tmrConnect").disabled = false;
+      $("tmrConnect").textContent = "CONNECT";
+      setStatus(error.message || "Connection failed.", false);
+      notify(error.message || "Connection failed.");
+    }
+  }
+
+  function disconnect() {
+    connected = false;
+
+    if (ws) {
+      try { ws.close(); } catch (_) {}
+    }
+
+    ws = null;
+    requests.clear();
+    updateButtons();
+  }
+
+  function updateButtons() {
+    const enabled =
+      connected &&
+      !trading &&
+      !activeContractId &&
+      mode() === "REAL";
+
+    if ($("tmrEven")) $("tmrEven").disabled = !enabled;
+    if ($("tmrOdd")) $("tmrOdd").disabled = !enabled;
+
+    const panel = $("tmrOwnTrading");
+    if (panel) {
+      panel.style.display = mode() === "REAL" ? "block" : "none";
+    }
+  }
+
+  function send(payload) {
+    return new Promise((resolve, reject) => {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        reject(new Error("Connect your real account first."));
         return;
       }
 
-      if (
-        !selectedRealAccount ||
-        !realAccounts.some(
-          account =>
-            String(account.account_id) ===
-            String(selectedRealAccount.account_id)
-        )
-      ) {
-        selectedRealAccount = realAccounts[0];
-      }
+      const id = ++requestNumber;
 
-      createAccountSelector();
-      updateAccountSelector();
-      updateRealButtons();
-
-    } catch (error) {
-      console.error("Real account loading failed:", error);
-      showMessage(error.message || "Unable to load Real accounts.");
-    }
-  }
-
-  function nextRequestId() {
-    requestCounter += 1;
-    return requestCounter;
-  }
-
-  function closeTradingSocket() {
-    if (tradingSocket) {
-      tradingSocket.onclose = null;
-      tradingSocket.onerror = null;
-      tradingSocket.onmessage = null;
+      requests.set(id, { resolve, reject });
 
       try {
-        tradingSocket.close();
-      } catch (_) {}
-    }
+        ws.send(JSON.stringify({
+          ...payload,
+          req_id: id
+        }));
+      } catch (error) {
+        requests.delete(id);
+        reject(error);
+        return;
+      }
 
-    tradingSocket = null;
-    socketPromise = null;
-
-    pendingRequests.forEach(item => {
-      clearTimeout(item.timer);
-      item.reject(new Error("Trading connection closed."));
+      setTimeout(() => {
+        if (requests.has(id)) {
+          requests.delete(id);
+          reject(new Error("Deriv response timed out."));
+        }
+      }, 15000);
     });
-
-    pendingRequests.clear();
   }
 
-  async function connectTradingSocket() {
-    if (
-      tradingSocket &&
-      tradingSocket.readyState === WebSocket.OPEN
-    ) {
-      return tradingSocket;
-    }
+  function handleMessage(message) {
+    if (message.req_id && requests.has(message.req_id)) {
+      const pending = requests.get(message.req_id);
+      requests.delete(message.req_id);
 
-    if (socketPromise) return socketPromise;
-
-    if (!selectedRealAccount) {
-      throw new Error("Select a Real Deriv account first.");
-    }
-
-    socketPromise = (async () => {
-      const accountId = String(
-        selectedRealAccount.account_id
-      );
-
-      const { data, error } =
-        await supabaseClient.functions.invoke(
-          "deriv-websocket-session",
-          {
-            body: {
-              account_id: accountId,
-              mode: "REAL"
-            }
-          }
+      if (message.error) {
+        pending.reject(
+          new Error(message.error.message || "Deriv request failed.")
         );
-
-      if (error) throw error;
-
-      if (!data?.success || !data?.ws_url) {
-        throw new Error(
-          data?.error || "Deriv connection could not be created."
-        );
+      } else {
+        pending.resolve(message);
       }
-
-      if (data.mode !== "REAL") {
-        throw new Error("Deriv returned the wrong account mode.");
-      }
-
-      const ws = new WebSocket(data.ws_url);
-
-      tradingSocket = ws;
-
-      await new Promise((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new Error("Deriv connection timed out."));
-          closeTradingSocket();
-        }, 15000);
-
-        ws.onopen = () => {
-          clearTimeout(timeout);
-          resolve();
-        };
-
-        ws.onerror = () => {
-          clearTimeout(timeout);
-          reject(new Error("Could not connect to Deriv."));
-        };
-
-        ws.onclose = () => {
-          if (tradingSocket === ws) {
-            tradingSocket = null;
-            socketPromise = null;
-          }
-        };
-
-        ws.onmessage = event => {
-          handleTradingMessage(event, ws);
-        };
-      });
-
-      return ws;
-    })();
-
-    try {
-      return await socketPromise;
-    } catch (error) {
-      socketPromise = null;
-      throw error;
-    }
-  }
-
-  function handleTradingMessage(event, ws) {
-    let message;
-
-    try {
-      message = JSON.parse(event.data);
-    } catch (_) {
-      return;
     }
 
     if (message.error) {
-      const requestId = message.req_id;
-
-      if (pendingRequests.has(requestId)) {
-        const pending = pendingRequests.get(requestId);
-
-        clearTimeout(pending.timer);
-        pendingRequests.delete(requestId);
-
-        pending.reject(
-          new Error(
-            message.error.message || "Deriv rejected the request."
-          )
-        );
-      } else {
-        console.error("Deriv trading error:", message.error);
-      }
-
-      return;
+      setStatus(message.error.message || "Deriv error.", connected);
     }
 
-    const requestId = message.req_id;
+    const contract =
+      message.proposal_open_contract ||
+      (message.msg_type === "proposal_open_contract" ? message : null);
 
-    if (pendingRequests.has(requestId)) {
-      const pending = pendingRequests.get(requestId);
-
-      clearTimeout(pending.timer);
-      pendingRequests.delete(requestId);
-
-      pending.resolve(message);
-    }
-
-    if (message.msg_type === "proposal_open_contract") {
-      handleContractUpdate(message.proposal_open_contract);
-    }
-
-    if (message.msg_type === "balance" && message.balance) {
-      console.log("Real account balance update:", message.balance);
-    }
+    if (contract) updateContract(contract);
   }
 
-  async function sendAndWait(payload, timeoutMs = 15000) {
-    const ws = await connectTradingSocket();
+  function getStake() {
+    const stake = Number($("tmrStake").value);
 
-    if (ws.readyState !== WebSocket.OPEN) {
-      throw new Error("Deriv trading connection is not open.");
+    if (!Number.isFinite(stake) || stake < 0.35) {
+      throw new Error("Enter a valid stake of at least $0.35.");
     }
 
-    const reqId = nextRequestId();
+    if (stake > getBalance(selectedAccount)) {
+      throw new Error("Your real account balance is too low.");
+    }
 
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        pendingRequests.delete(reqId);
-
-        reject(
-          new Error("Deriv did not respond in time. Check your account before retrying.")
-        );
-      }, timeoutMs);
-
-      pendingRequests.set(reqId, {
-        resolve,
-        reject,
-        timer
-      });
-
-      ws.send(JSON.stringify({
-        ...payload,
-        req_id: reqId
-      }));
-    });
+    return stake;
   }
 
-  function createProposalDialog(proposal, contractType, stake) {
-    document.getElementById("tmProposalDialog")?.remove();
-
-    const payout = Number(proposal.payout);
-    const askPrice = Number(proposal.ask_price);
-    const profit = payout - askPrice;
-
-    if (
-      !Number.isFinite(payout) ||
-      !Number.isFinite(askPrice) ||
-      askPrice <= 0
-    ) {
-      throw new Error("Deriv returned an invalid proposal.");
-    }
-
-    const overlay = document.createElement("div");
-
-    overlay.id = "tmProposalDialog";
-
-    overlay.style.cssText = `
-      position:fixed;
-      inset:0;
-      z-index:99999;
-      display:flex;
-      align-items:center;
-      justify-content:center;
-      padding:18px;
-      background:rgba(0,0,0,.78);
-    `;
-
-    const panel = document.createElement("div");
-
-    panel.style.cssText = `
-      width:100%;
-      max-width:380px;
-      padding:20px;
-      border-radius:15px;
-      background:#172438;
-      color:#f1f5f9;
-      border:1px solid #34465c;
-      box-shadow:0 20px 60px rgba(0,0,0,.45);
-    `;
-
-    const heading = document.createElement("h3");
-    heading.textContent = `Confirm REAL ${contractType} trade`;
-
-    const details = document.createElement("div");
-
-    details.style.cssText = `
-      display:grid;
-      gap:12px;
-      margin:18px 0;
-      font-size:14px;
-    `;
-
-    const rows = [
-      ["Market", SYMBOL],
-      ["Stake", money(askPrice)],
-      ["Potential payout", money(payout)],
-      ["Potential profit", money(profit)],
-      ["Maximum loss", money(askPrice)]
-    ];
-
-    rows.forEach(([label, value]) => {
-      const row = document.createElement("div");
-
-      row.style.cssText =
-        "display:flex;justify-content:space-between;gap:10px;";
-
-      const left = document.createElement("span");
-      left.textContent = label;
-
-      const right = document.createElement("strong");
-      right.textContent = value;
-
-      row.append(left, right);
-      details.appendChild(row);
-    });
-
-    const warning = document.createElement("p");
-
-    warning.style.cssText = `
-      color:#f3c969;
-      font-size:12px;
-      line-height:1.5;
-    `;
-
-    warning.textContent =
-      "Real money is at risk. Confirm only if you accept the quoted stake and possible loss.";
-
-    const actions = document.createElement("div");
-
-    actions.style.cssText =
-      "display:flex;gap:10px;margin-top:18px;";
-
-    const cancel = document.createElement("button");
-
-    cancel.textContent = "Cancel";
-
-    cancel.style.cssText = `
-      flex:1;padding:12px;border:1px solid #52647c;
-      border-radius:8px;background:transparent;
-      color:white;font-weight:800;
-    `;
-
-    const confirm = document.createElement("button");
-
-    confirm.textContent = "CONFIRM REAL TRADE";
-
-    confirm.style.cssText = `
-      flex:1;padding:12px;border:0;border-radius:8px;
-      background:#087f68;color:white;font-weight:900;
-    `;
-
-    actions.append(cancel, confirm);
-    panel.append(heading, details, warning, actions);
-    overlay.appendChild(panel);
-    document.body.appendChild(overlay);
-
-    return new Promise(resolve => {
-      cancel.onclick = () => {
-        overlay.remove();
-        resolve(false);
-      };
-
-      overlay.addEventListener("click", event => {
-        if (event.target === overlay) {
-          overlay.remove();
-          resolve(false);
-        }
-      });
-
-      confirm.onclick = () => {
-        confirm.disabled = true;
-        confirm.textContent = "PURCHASING...";
-
-        cancel.disabled = true;
-
-        resolve(true);
-      };
-    });
-  }
-
-  async function requestRealProposal(contractType) {
-    if (realTradeBusy) return;
-
-    if (
-      typeof tradeMasterAccountMode !== "undefined" &&
-      tradeMasterAccountMode !== "REAL"
-    ) {
+  async function requestTrade(direction) {
+    if (mode() !== "REAL") {
+      notify("Select REAL account mode first.");
       return;
     }
 
-    if (!supabaseClient || !currentSession) {
-      showMessage("Please log in first.");
+    if (!connected) {
+      notify("Connect your Deriv account first.");
       return;
     }
 
-    if (!selectedRealAccount) {
-      await loadRealTradingAccounts();
-
-      if (!selectedRealAccount) {
-        showMessage("No Real Deriv account is available.");
-        return;
-      }
-    }
-
-    if (!marketConnected) {
-      showMessage("Wait for the live market to connect.");
+    if (trading || activeContractId) {
+      notify("Wait for the current trade to finish.");
       return;
     }
-
-    if (!["EVEN", "ODD"].includes(contractType)) {
-      showMessage("Invalid contract type.");
-      return;
-    }
-
-    const stake = Number($("stake")?.value);
-
-    if (!Number.isFinite(stake) || stake < MIN_STAKE) {
-      showMessage(`Minimum stake is ${money(MIN_STAKE)}.`);
-      return;
-    }
-
-    realTradeBusy = true;
-    updateRealButtons();
 
     try {
-      const currency =
-        selectedRealAccount.currency || "USD";
+      const stake = getStake();
 
-      const derivContractType =
-        contractType === "EVEN"
-          ? "DIGITEVEN"
-          : "DIGITODD";
+      trading = true;
+      updateButtons();
+      setStatus(`Requesting live ${direction} proposal...`);
 
-      showMessage("Connecting to your Deriv Real account...");
-
-      const proposalResponse = await sendAndWait({
+      const response = await send({
         proposal: 1,
         amount: stake,
         basis: "stake",
-        contract_type: derivContractType,
-        currency,
-        duration: 1,
-        duration_unit: "t",
+        contract_type: direction === "EVEN" ? "DIGITEVEN" : "DIGITODD",
+        currency: getCurrency(selectedAccount),
+        duration: DURATION,
+        duration_unit: DURATION_UNIT,
         underlying_symbol: SYMBOL,
         subscribe: 1
       });
 
-      const proposal = proposalResponse.proposal;
+      const proposal = response.proposal;
 
       if (!proposal?.id) {
-        throw new Error("Deriv did not return a valid proposal.");
+        throw new Error("Deriv did not return a proposal ID.");
       }
 
-      proposalSubscriptionId =
-        proposalResponse.subscription?.id || null;
+      const ask = Number(proposal.ask_price);
+      const payout = Number(proposal.payout);
 
-      const confirmed = await createProposalDialog(
-        proposal,
-        contractType,
-        stake
-      );
-
-      if (!confirmed) {
-        showMessage("Trade cancelled. No purchase was made.");
-        return;
+      if (!Number.isFinite(ask) || !Number.isFinite(payout) ||
+          ask <= 0 || payout <= 0) {
+        throw new Error("Invalid proposal price returned by Deriv.");
       }
 
-      // Buy only after the user confirms the live proposal.
-      const buyResponse = await sendAndWait({
-        buy: String(proposal.id),
-        price: Number(proposal.ask_price)
+      pendingProposal = {
+        id: proposal.id,
+        direction,
+        ask,
+        payout,
+        stake,
+        created: Date.now()
+      };
+
+      $("tmrPayout").textContent = cash(payout);
+      $("tmrProfit").textContent = cash(payout - ask);
+      $("tmrLoss").textContent = cash(ask);
+      $("tmrResult").textContent = "Pending";
+
+      $("tmrConfirmText").textContent =
+        `${direction} | Stake: ${cash(ask)} | ` +
+        `Potential payout: ${cash(payout)} | ` +
+        `Potential profit: ${cash(payout - ask)} | ` +
+        `Maximum loss: ${cash(ask)}. Confirm to purchase.`;
+
+      $("tmrConfirmBox").hidden = false;
+      $("tmrBuy").disabled = false;
+
+      setStatus("Live proposal received. Waiting for your confirmation.");
+
+    } catch (error) {
+      trading = false;
+      updateButtons();
+      setStatus(error.message, connected);
+      notify(error.message);
+    }
+  }
+
+  function cancelTrade() {
+    pendingProposal = null;
+    trading = false;
+    $("tmrConfirmBox").hidden = true;
+    setStatus("Purchase cancelled. No trade was placed.");
+    updateButtons();
+  }
+
+  async function buyTrade() {
+    if (!pendingProposal || !connected) {
+      notify("No valid proposal is available.");
+      return;
+    }
+
+    if (Date.now() - pendingProposal.created > 110000) {
+      cancelTrade();
+      notify("Proposal expired. Request a new one.");
+      return;
+    }
+
+    const proposal = pendingProposal;
+
+    $("tmrBuy").disabled = true;
+    $("tmrBuy").textContent = "PURCHASING";
+    setStatus("Sending purchase confirmation to Deriv...");
+
+    try {
+      const response = await send({
+        buy: proposal.id,
+        price: proposal.ask
       });
 
-      const bought = buyResponse.buy;
+      const bought = response.buy;
 
       if (!bought?.contract_id) {
         throw new Error(
-          "Deriv did not confirm the purchase. Check your account before retrying."
+          "No contract ID received. Check your Deriv portfolio before trying again."
         );
       }
 
       activeContractId = bought.contract_id;
+      pendingProposal = null;
+      $("tmrConfirmBox").hidden = true;
+      $("tmrResult").textContent = "Running";
 
-      showMessage(
-        "REAL trade purchased. Contract #" + activeContractId
-      );
+      setStatus(`Purchase confirmed. Contract ${activeContractId} is running.`);
 
-      const positions = $("positionsState");
-
-      if (positions) {
-        positions.textContent =
-          `REAL ${contractType} contract #${activeContractId} is open. Waiting for settlement...`;
-      }
-
-      await sendAndWait({
+      await send({
         proposal_open_contract: 1,
         contract_id: activeContractId,
         subscribe: 1
       });
 
     } catch (error) {
-      console.error("Real trade error:", error);
-
-      showMessage(
-        error.message ||
-        "Real trade request failed. Check your Deriv account before trying again."
+      // Never blindly retry an uncertain purchase.
+      pendingProposal = null;
+      trading = false;
+      $("tmrConfirmBox").hidden = true;
+      setStatus(error.message || "Purchase response uncertain.", false);
+      notify(
+        "Check your Deriv portfolio before attempting another purchase."
       );
-
-    } finally {
-      realTradeBusy = false;
-      updateRealButtons();
     }
+
+    $("tmrBuy").textContent = "CONFIRM PURCHASE";
+    updateButtons();
   }
 
-  function handleContractUpdate(contract) {
-    if (!contract) return;
+  function updateContract(contract) {
+    if (!activeContractId) return;
 
     if (
-      activeContractId &&
+      contract.contract_id &&
       String(contract.contract_id) !== String(activeContractId)
-    ) {
-      return;
-    }
-
-    const status = String(
-      contract.status || ""
-    ).toLowerCase();
+    ) return;
 
     const finished =
-      contract.is_sold === 1 ||
-      contract.is_expired === 1 ||
-      status === "won" ||
-      status === "lost" ||
-      status === "sold";
+      contract.is_sold ||
+      contract.is_expired ||
+      contract.status === "sold" ||
+      contract.status === "expired";
 
-    if (!finished) return;
-
-    const profit = Number(contract.profit || 0);
-    const payout = Number(contract.payout || 0);
-
-    const result = profit > 0
-      ? `REAL TRADE WON · Profit ${money(profit)} · Payout ${money(payout)}`
-      : `REAL TRADE LOST · ${money(Math.abs(profit))}`;
-
-    showMessage(result);
-
-    const positions = $("positionsState");
-
-    if (positions) {
-      positions.textContent = result;
-    }
-
-    activeContractId = null;
-
-    if (typeof loadDerivAccounts === "function") {
-      loadDerivAccounts();
-    }
-
-    loadRealTradingAccounts();
-  }
-
-  function updateRealButtons() {
-    const even = $("evenBtn");
-    const odd = $("oddBtn");
-
-    if (!even || !odd) return;
-
-    const isReal =
-      typeof tradeMasterAccountMode !== "undefined" &&
-      tradeMasterAccountMode === "REAL";
-
-    if (!isReal) return;
-
-    const disabled =
-      realTradeBusy || !selectedRealAccount;
-
-    even.disabled = disabled;
-    odd.disabled = disabled;
-
-    even.textContent = realTradeBusy
-      ? "PLEASE WAIT..."
-      : "EVEN";
-
-    odd.textContent = realTradeBusy
-      ? "PLEASE WAIT..."
-      : "ODD";
-  }
-
-  // Intercept Real button clicks before the old placeholder handlers.
-  document.addEventListener("click", event => {
-    const button = event.target.closest("#evenBtn, #oddBtn");
-
-    if (!button) return;
-
-    if (
-      typeof tradeMasterAccountMode === "undefined" ||
-      tradeMasterAccountMode !== "REAL"
-    ) {
+    if (!finished) {
+      if (contract.status) {
+        setStatus(`Contract status: ${contract.status}`);
+      }
       return;
     }
 
-    event.preventDefault();
-    event.stopPropagation();
-    event.stopImmediatePropagation();
+    const profit = Number(contract.profit ?? 0);
 
-    requestRealProposal(
-      button.id === "evenBtn" ? "EVEN" : "ODD"
+    $("tmrResult").textContent = cash(profit);
+    $("tmrResult").style.color =
+      profit >= 0 ? "#00d49a" : "#ff4545";
+
+    setStatus(
+      profit >= 0
+        ? `Contract finished. Profit: ${cash(profit)}`
+        : `Contract finished. Loss: ${cash(Math.abs(profit))}`
     );
-  }, true);
 
-  // Observe the dynamically created account switcher.
-  const observer = new MutationObserver(() => {
-    if ($("tmAccountSwitch")) {
-      createAccountSelector();
-      updateAccountSelector();
-      updateRealButtons();
-    }
-  });
-
-  observer.observe(document.documentElement, {
-    childList: true,
-    subtree: true
-  });
-
-  // Keep the existing Demo button logic intact.
-  const originalUpdateButtons = window.updateDemoTradeButtons;
-
-  if (typeof originalUpdateButtons === "function") {
-    window.updateDemoTradeButtons = function () {
-      if (
-        typeof tradeMasterAccountMode !== "undefined" &&
-        tradeMasterAccountMode === "REAL"
-      ) {
-        updateRealButtons();
-        return;
-      }
-
-      originalUpdateButtons();
-    };
+    activeContractId = null;
+    trading = false;
+    updateButtons();
+    refreshBalance();
+    notify(`Trade settled. Result: ${cash(profit)}`);
   }
 
-  // Load the connected Real accounts after login.
-  const accountObserver = new MutationObserver(() => {
-    if (
-      $("tmAccountSwitch") &&
-      currentSession &&
-      !accountObserver.loaded
-    ) {
-      accountObserver.loaded = true;
-      loadRealTradingAccounts();
+  async function refreshBalance() {
+    try {
+      const { data, error } = await supabase().functions.invoke(
+        BALANCE_FUNCTION,
+        { body: {} }
+      );
+
+      if (error || !data?.success) return;
+
+      const latest = findAccounts(data.accounts).find(
+        item => getAccountId(item) === getAccountId(selectedAccount)
+      );
+
+      if (latest) {
+        selectedAccount = latest;
+        updateBalance();
+      }
+    } catch (error) {
+      console.error("Balance refresh failed:", error);
     }
-  });
+  }
 
-  accountObserver.observe(document.documentElement, {
-    childList: true,
-    subtree: true
-  });
+  async function initialise() {
+    buildInterface();
 
-  console.log("Trade Master Real trading module loaded.");
+    $("tmrEven").disabled = true;
+    $("tmrOdd").disabled = true;
+
+    try {
+      await loadAccounts();
+      setStatus("Select your account and press CONNECT.", false);
+    } catch (error) {
+      setStatus(error.message, false);
+    }
+
+    setInterval(updateButtons, 500);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initialise);
+  } else {
+    initialise();
+  }
 })();
